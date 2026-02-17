@@ -317,3 +317,126 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_rename_fixed() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("test.txt");
+        File::create(&file_path).unwrap();
+
+        let cmd = RenameCommand::Fixed {
+            name: "new_name".into(),
+            keep_ext: true,
+        };
+        let res = handle_rename(file_path.to_str().unwrap().into(), cmd);
+
+        assert_eq!(res.status, "Success");
+        assert_eq!(res.new_name.unwrap(), "new_name.txt");
+    }
+
+    #[test]
+    fn test_rename_serial_suffix() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("test.txt");
+        File::create(&file_path).unwrap();
+
+        let cmd = RenameCommand::Serial {
+            prefix: "".into(),
+            suffix: "_suffix".into(),
+            number: 1,
+            pad: 3,
+            keep_ext: true,
+            keep_original: false,
+        };
+        let res = handle_rename(file_path.to_str().unwrap().into(), cmd);
+
+        assert_eq!(res.status, "Success");
+        assert_eq!(res.new_name.unwrap(), "001_suffix.txt");
+    }
+
+    #[test]
+    fn test_rename_trim_end() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("abcde.txt");
+        File::create(&file_path).unwrap();
+
+        let cmd = RenameCommand::Trim {
+            count: 2,
+            position: Position::End,
+        };
+        let res = handle_rename(file_path.to_str().unwrap().into(), cmd);
+
+        assert_eq!(res.status, "Success");
+        assert_eq!(res.new_name.unwrap(), "abc.txt");
+    }
+
+    #[test]
+    fn test_rename_replace() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("old_name_v1.txt");
+        File::create(&file_path).unwrap();
+
+        let cmd = RenameCommand::Replace {
+            from: "v1".into(),
+            to: "v2".into(),
+            use_regex: false,
+        };
+        let res = handle_rename(file_path.to_str().unwrap().into(), cmd);
+
+        assert_eq!(res.status, "Success");
+        assert_eq!(res.new_name.unwrap(), "old_name_v2.txt");
+    }
+
+    #[test]
+    fn test_rename_replace_regex() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("image_123_test.png");
+        File::create(&file_path).unwrap();
+
+        let cmd = RenameCommand::Replace {
+            from: r"(\d+)".into(),
+            to: "NUM".into(),
+            use_regex: true,
+        };
+        let res = handle_rename(file_path.to_str().unwrap().into(), cmd);
+
+        assert_eq!(res.status, "Success");
+        assert_eq!(res.new_name.unwrap(), "image_NUM_test.png");
+    }
+
+    #[test]
+    fn test_rename_add_start() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("file.txt");
+        File::create(&file_path).unwrap();
+
+        let cmd = RenameCommand::Add {
+            text: "prefix_".into(),
+            position: Position::Start,
+        };
+        let res = handle_rename(file_path.to_str().unwrap().into(), cmd);
+
+        assert_eq!(res.status, "Success");
+        assert_eq!(res.new_name.unwrap(), "prefix_file.txt");
+    }
+
+    #[test]
+    fn test_rename_extension() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("photo.jpg");
+        File::create(&file_path).unwrap();
+
+        let cmd = RenameCommand::Extension {
+            new_ext: "png".into(),
+        };
+        let res = handle_rename(file_path.to_str().unwrap().into(), cmd);
+
+        assert_eq!(res.status, "Success");
+        assert_eq!(res.new_name.unwrap(), "photo.png");
+    }
+}
