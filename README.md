@@ -1,7 +1,6 @@
-# DDRenamer (Tauri-Rust Edition)
+# DDRenamer
 
-Lost Technology Reborn.
-かつての名作「DDRenamer」を、Rustの堅牢性とTauriの軽量さで現代に蘇らせた高機能リネームツールです。
+Rustの堅牢性とTauriの軽量さを備えた高機能リネームツールです。
 
 ![DDRenamer Icon](public/tauri.svg)
 
@@ -22,22 +21,26 @@ Lost Technology Reborn.
 
 タブ切り替えにより、以下の高度なリネーム操作を直感的に行えます。
 
-### 1. 定型 (Fixed)
+### 1. リネーム (Rename)
 - 全ファイルを指定した名前に統一。
 - 拡張子の維持/破棄を選択可能。
 
-### 2. 連番 (Serial)
+### 2. 追加 (Add)
+- **Add**: 先頭または末尾に文字列を追加（拡張子を跨がない安全設計）。
+
+### 3. 削除 (Trim)
+- **Trim**: 先頭または末尾からN文字を削除。
+
+### 4. 置換 (Replace)
+- **Replace**: 文字列置換 (**正規表現 Regex 対応**)。
+
+### 5. 連番 (Serial)
 - **Advanced Serial**: 接頭辞 (Prefix) + 連番 + 接尾辞 (Suffix)。
 - **Keep Original**: 元のファイル名を残したまま連番を付与可能 (`Vacation_001.jpg` 等)。
 - **Manual Increment**: ファイルを1つずつドロップするたびにカウントアップする「手動連番」モード搭載。
 - **Padding Control**: 桁数（0埋め）を自在に指定。
 
-### 3. 編集 (Edit)
-- **Replace**: 文字列置換 (**正規表現 Regex 対応**)。
-- **Add**: 先頭または末尾に文字列を追加（拡張子を跨がない安全設計）。
-- **Trim**: 先頭または末尾からN文字を削除。
-
-### 4. 変換 (Convert)
+### 6. 変換 (Convert)
 - **Case**: 大文字/小文字変換 (UPPERCASE / lowercase)。**Stemのみに適用**。
 - **Width**: 全角/半角変換 (ＡＢＣ ↔ ABC)。**Stemのみに適用**。
 - **Extension**: 拡張子の一括変更。
