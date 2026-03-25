@@ -15,6 +15,10 @@ Rustの堅牢性とTauriの軽量さを備えた高機能リネームツール�
   - **Tauri v2** + React + Tailwind CSS による洗練されたインターフェース。
   - 直感的なフラットデザインとスムーズな操作性。
   - ダークモード標準搭載。
+- **📋 柔軟なファイル入力**:
+  - **ドラッグ＆ドロップ**: ファイルマネージャーから直接ドロップ。
+  - **クリップボードペースト** (`Ctrl+V`): コピーしたファイルを貼り付けて即リネーム。
+  - **Alethoglyph 連携**: Alethoglyph で検索 → `Ctrl+C` → DDRenamer で `Ctrl+V` のシームレスなワークフロー。
 - **Cross-Platform**: Windows, macOS, Linux 対応。
 
 ## 🛠 機能一覧
@@ -64,7 +68,7 @@ npm run tauri build
 生成されたバイナリ (`src-tauri/target/release/bundle/`) を使用してください。
 
 ## ⚠️ Known Issues / Notes
-- **Wayland (Linux)**: デスクトップ環境の制約により、ファイルマネージャーからのドラッグ＆ドロップが動作しない場合があります。X11環境または他OSでは正常に動作します。
+- **Wayland (Linux)**: デスクトップ環境の制約により、ファイルマネージャーからのドラッグ＆ドロップが動作しない場合があります。`Ctrl+V` ペーストは全環境で動作します。
 
 ## 📜 ライセンス
 MIT License (or Unlicense) - This is a personal restoration project.
