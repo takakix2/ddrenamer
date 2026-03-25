@@ -311,7 +311,6 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
     }
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 // --- Global Clipboard Reader ---
 
 #[tauri::command]
@@ -342,7 +341,8 @@ fn read_clipboard_files() -> Vec<String> {
         }
     }
 
-    // Try generic text/uri-list
+    // Try generic text/uri-list (Linux only — get_buffer is platform-specific)
+    #[cfg(target_os = "linux")]
     if let Ok(buffer) = ctx.get_buffer("text/uri-list") {
         if let Ok(text) = String::from_utf8(buffer) {
             for line in text.lines() {
