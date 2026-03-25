@@ -110,34 +110,17 @@ function App() {
     }
   }, [activeTab]);
 
-  // --- Drag-Drop Event (Tauri v2 API) ---
-  useEffect(() => {
-    const webview = getCurrentWebview();
-    const unlistenPromise = webview.onDragDropEvent(async (event) => {
-      const payload = event.payload;
+  // --- File Processing Logic ---
+  const processFiles = async (paths: string[]) => {
+    if (paths.length === 0) return;
 
-      if (payload.type === "enter") {
-        setIsDragOver(true);
-        return;
-      }
+    const cfg = configRef.current;
+    const { activeTab } = cfg;
 
-      if (payload.type !== "drop") {
-        setIsDragOver(false);
-        return;
-      }
+    const newLogs: LogEntry[] = [];
+    let currentSeq = cfg.manualIncrement ? cfg.currentManualCount : cfg.serialStart;
 
-      // payload.type === "drop"
-      setIsDragOver(false);
-      const paths = payload.paths;
-      if (paths.length === 0) return;
-
-      const cfg = configRef.current;
-      const { activeTab } = cfg;
-
-      const newLogs: LogEntry[] = [];
-      let currentSeq = cfg.manualIncrement ? cfg.currentManualCount : cfg.serialStart;
-
-      for (let i = 0; i < paths.length; i++) {
+    for (let i = 0; i < paths.length; i++) {
         const filePath = paths[i];
         let cmd = {};
 
@@ -216,19 +199,68 @@ function App() {
             success: false,
           });
         }
+    }
+
+    setLogs((prev) => [...newLogs, ...prev].slice(0, 50));
+
+    if (cfg.manualIncrement) {
+      setCurrentManualCount(currentSeq);
+    }
+  };
+
+  // --- Drag-Drop Event (Tauri v2 API) ---
+  useEffect(() => {
+    const webview = getCurrentWebview();
+    const unlistenPromise = webview.onDragDropEvent(async (event) => {
+      const payload = event.payload;
+
+      if (payload.type === "enter") {
+        setIsDragOver(true);
+        return;
       }
 
-      setLogs((prev) => [...newLogs, ...prev].slice(0, 50));
-
-      if (cfg.manualIncrement) {
-        setCurrentManualCount(currentSeq);
+      if (payload.type !== "drop") {
+        setIsDragOver(false);
+        return;
       }
+
+      setIsDragOver(false);
+      const paths = payload.paths;
+      processFiles(paths);
+
     });
 
     return () => {
       unlistenPromise.then((unlisten) => unlisten());
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // --- Keyboard Event (Ctrl+V) ---
+  useEffect(() => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
+      // ignore if input is focused
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      const modifier = e.ctrlKey || e.metaKey;
+      if (modifier && e.key.toLowerCase() === 'v') {
+        e.preventDefault();
+        try {
+          // Rustバックエンド経由でクリップボードからファイルパスを読み取る
+          const paths = await invoke<string[]>("read_clipboard_files");
+          if (paths && paths.length > 0) {
+            processFiles(paths);
+          }
+        } catch (err) {
+          console.error("Paste error", err);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-col h-screen w-screen bg-[#1e1e1e] text-gray-300 font-sans selection:bg-[#264f78] selection:text-white overflow-hidden">
