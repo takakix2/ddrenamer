@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { hasFiles, readFiles } from "tauri-plugin-clipboard-x-api";
 import {
   Hash,
   ArrowRightLeft,
@@ -247,10 +248,12 @@ function App() {
       if (modifier && e.key.toLowerCase() === 'v') {
         e.preventDefault();
         try {
-          // Rustバックエンド経由でクリップボードからファイルパスを読み取る
-          const paths = await invoke<string[]>("read_clipboard_files");
-          if (paths && paths.length > 0) {
-            processFiles(paths);
+          // tauri-plugin-clipboard-x: 全OS対応のファイル読み取り
+          if (await hasFiles()) {
+            const result = await readFiles();
+            if (result.paths && result.paths.length > 0) {
+              processFiles(result.paths);
+            }
           }
         } catch (err) {
           console.error("Paste error", err);

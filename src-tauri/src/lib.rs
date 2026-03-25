@@ -2,8 +2,6 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 use regex::Regex;
-use clipboard_rs::{Clipboard, ClipboardContext};
-use url::Url;
 
 // --- Enum types for type-safe deserialization ---
 
@@ -311,73 +309,12 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
     }
 }
 
-// --- Global Clipboard Reader ---
-
-#[tauri::command]
-fn read_clipboard_files() -> Vec<String> {
-    let ctx = match ClipboardContext::new() {
-        Ok(c) => c,
-        Err(_) => return vec![],
-    };
-
-    let mut paths = vec![];
-
-    // Try Linux specific gnome-copied-files
-    #[cfg(target_os = "linux")]
-    if let Ok(buffer) = ctx.get_buffer("x-special/gnome-copied-files") {
-        if let Ok(text) = String::from_utf8(buffer) {
-            for line in text.lines().skip(1) { // Skip "copy\n" or "cut\n"
-                if let Ok(url) = Url::parse(line) {
-                    if let Ok(path) = url.to_file_path() {
-                        if let Some(p) = path.to_str() {
-                            paths.push(p.to_string());
-                        }
-                    }
-                }
-            }
-            if !paths.is_empty() {
-                return paths;
-            }
-        }
-    }
-
-    // Try generic text/uri-list (Linux only — get_buffer is platform-specific)
-    #[cfg(target_os = "linux")]
-    if let Ok(buffer) = ctx.get_buffer("text/uri-list") {
-        if let Ok(text) = String::from_utf8(buffer) {
-            for line in text.lines() {
-                if let Ok(url) = Url::parse(line.trim()) {
-                    if let Ok(path) = url.to_file_path() {
-                        if let Some(p) = path.to_str() {
-                            paths.push(p.to_string());
-                        }
-                    }
-                }
-            }
-            if !paths.is_empty() {
-                return paths;
-            }
-        }
-    }
-
-    // Attempt generic string read (for manual paths copied)
-    if let Ok(text) = ctx.get_text() {
-        for line in text.lines() {
-            let p = Path::new(line.trim());
-            if p.exists() && p.is_file() {
-                paths.push(line.trim().to_string());
-            }
-        }
-    }
-
-    paths
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![handle_rename, read_clipboard_files])
+        .plugin(tauri_plugin_clipboard_x::init())
+        .invoke_handler(tauri::generate_handler![handle_rename])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
