@@ -16,7 +16,8 @@
         "width": 680,
         "height": 638,
         "resizable": true,
-        "maximizable": false
+        "maximizable": false,
+        "decorations": false
       }
     ],
     "security": {

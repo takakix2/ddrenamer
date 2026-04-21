@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { hasFiles, readFiles } from "tauri-plugin-clipboard-x-api";
 import {
@@ -40,6 +41,22 @@ function App() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [showLogs, setShowLogs] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    const win = getCurrentWindow();
+    win.isMaximized().then(val => { if (!cancelled) setIsMaximized(val); });
+    win.onResized(async () => {
+      if (!cancelled) setIsMaximized(await win.isMaximized());
+    }).then(u => { unlisten = u; });
+    return () => { cancelled = true; if (unlisten) unlisten(); };
+  }, []);
+
+  const handleMinimize = () => getCurrentWindow().minimize();
+  const handleToggleMaximize = () => getCurrentWindow().toggleMaximize();
+  const handleClose = () => getCurrentWindow().close();
 
   // --- Config States ---
 
@@ -267,6 +284,22 @@ function App() {
 
   return (
     <div className="flex flex-col h-screen w-screen bg-[#1e1e1e] text-gray-300 font-sans selection:bg-[#264f78] selection:text-white overflow-hidden">
+      {/* CSD Titlebar */}
+      <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '32px', background: '#1e1e1e', borderBottom: '1px solid #2d2d2d', flexShrink: 0, userSelect: 'none', WebkitUserSelect: 'none' }}>
+        <span data-tauri-drag-region style={{ paddingLeft: '12px', fontSize: '12px', color: '#888', fontWeight: 500 }}>DDRenamer</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+          <button onClick={handleMinimize} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', width: '32px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', transition: 'background 0.15s' }}>
+            <span style={{ fontSize: '14px', lineHeight: 1 }}>─</span>
+          </button>
+          <button onClick={handleToggleMaximize} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', width: '32px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', transition: 'background 0.15s' }}>
+            <span style={{ fontSize: '10px', lineHeight: 1 }}>{isMaximized ? '❐' : '□'}</span>
+          </button>
+          <button onClick={handleClose} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', width: '32px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', transition: 'background 0.15s' }}>
+            <span style={{ fontSize: '12px', lineHeight: 1 }}>✕</span>
+          </button>
+        </div>
+      </div>
+
       {/* Header / Tabs - 2 Rows */}
       <div className="flex flex-col border-b border-[#2d2d2d] bg-[#1e1e1e]">
         {/* Row 1: リネーム, 追加, 削除 */}
