@@ -282,10 +282,18 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handleDrag = (e: React.MouseEvent) => {
+    const tag = (e.target as HTMLElement).closest('button, a, input');
+    if (!tag) {
+      e.preventDefault();
+      getCurrentWindow().startDragging();
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen w-screen bg-[#1e1e1e] text-gray-300 font-sans selection:bg-[#264f78] selection:text-white overflow-hidden">
       {/* CSD Titlebar */}
-      <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '32px', background: '#1e1e1e', borderBottom: '1px solid #2d2d2d', flexShrink: 0, userSelect: 'none', WebkitUserSelect: 'none' }}>
+      <div onMouseDown={handleDrag} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '32px', background: '#1e1e1e', borderBottom: '1px solid #2d2d2d', flexShrink: 0, userSelect: 'none', WebkitUserSelect: 'none', cursor: 'grab' }}>
         <span data-tauri-drag-region style={{ paddingLeft: '12px', fontSize: '12px', color: '#888', fontWeight: 500 }}>DDRenamer</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
           <button onClick={handleMinimize} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', width: '32px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', transition: 'background 0.15s' }}>
