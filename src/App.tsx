@@ -559,8 +559,10 @@ function App() {
 
         {/* Footer / Logs - Collapsible */}
         <div
+          onMouseDown={handleDrag}
           className={`bg-[#141517] border-t border-[#2c2e33] flex flex-col shadow-[0_-4px_20px_rgba(0,0,0,0.2)] z-10 relative ${showLogs ? "flex-1 min-h-0" : "h-12"
             }`}
+          style={{ cursor: showLogs ? undefined : 'grab' }}
         >
           <button
             onClick={() => setShowLogs(!showLogs)}
