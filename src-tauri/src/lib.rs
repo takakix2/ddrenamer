@@ -193,6 +193,13 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
             to,
             use_regex,
         } => {
+            if from.is_empty() {
+                return RenameResult {
+                    path,
+                    status: "検索文字列が空です".into(),
+                    new_name: None,
+                };
+            }
             if *use_regex {
                 match Regex::new(from) {
                     Ok(re) => Ok(re.replace_all(old_name, to.as_str()).to_string()),
