@@ -36,8 +36,8 @@ pub enum RenameCommand {
         keep_ext: bool,
     },
     Serial {
-        prefix: String,
-        suffix: String,
+        text: String,
+        position: Position,
         number: u32,
         pad: usize,
         keep_ext: bool,
@@ -160,21 +160,24 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
             }
         }
 
-        // --- Serial: prefix + (original?) + number + suffix ---
+        // --- Serial: text + number block, positioned relative to original ---
         RenameCommand::Serial {
-            prefix,
-            suffix,
+            text,
+            position,
             number,
             pad,
             keep_ext,
             keep_original,
         } => {
             let num_str = format!("{:0width$}", number, width = pad);
+            let text_num = format!("{}{}", text, num_str);
             let generated = if *keep_original {
-                // prefix + original_stem + number + suffix
-                format!("{}{}{}{}", prefix, name_stem, num_str, suffix)
+                match position {
+                    Position::Start => format!("{}{}", text_num, name_stem),
+                    Position::End => format!("{}{}", name_stem, text_num),
+                }
             } else {
-                format!("{}{}{}", prefix, num_str, suffix)
+                text_num
             };
 
             if *keep_ext && !ext.is_empty() {
@@ -279,13 +282,28 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
 
             let new_path = parent.join(&new_name);
 
-            // Prevent overwriting existing files
-            if new_path.exists() {
+            // If the name hasn't actually changed, return success immediately
+            if old_path == new_path {
                 return RenameResult {
                     path,
-                    status: format!("Target exists: {}", new_name),
-                    new_name: None,
+                    status: "Success".into(),
+                    new_name: Some(new_name),
                 };
+            }
+
+            // Prevent overwriting existing files
+            if new_path.exists() {
+                // To support case-only renames on case-insensitive filesystems,
+                // we should check if the lowercased names match.
+                let old_lower = old_path.to_string_lossy().to_lowercase();
+                let new_lower = new_path.to_string_lossy().to_lowercase();
+                if old_lower != new_lower {
+                    return RenameResult {
+                        path,
+                        status: format!("Target exists: {}", new_name),
+                        new_name: None,
+                    };
+                }
             }
 
             match fs::rename(old_path, &new_path) {
@@ -347,8 +365,8 @@ mod tests {
         File::create(&file_path).unwrap();
 
         let cmd = RenameCommand::Serial {
-            prefix: "".into(),
-            suffix: "_suffix".into(),
+            text: "_suffix".into(),
+            position: Position::End,
             number: 1,
             pad: 3,
             keep_ext: true,
@@ -357,7 +375,7 @@ mod tests {
         let res = handle_rename(file_path.to_str().unwrap().into(), cmd);
 
         assert_eq!(res.status, "Success");
-        assert_eq!(res.new_name.unwrap(), "001_suffix.txt");
+        assert_eq!(res.new_name.unwrap(), "_suffix001.txt");
     }
 
     #[test]

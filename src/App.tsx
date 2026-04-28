@@ -64,6 +64,7 @@ function App() {
   const [fixedName, setFixedName] = useState("");
 
   // 2. Serial
+  const [useSerialText, setUseSerialText] = useState(true);
   const [serialText, setSerialText] = useState("Img_");
   const [serialPosition, setSerialPosition] = useState<"start" | "end">("start");
   const inputPrefixRef = useRef<HTMLInputElement>(null);
@@ -71,9 +72,6 @@ function App() {
   const [serialPad, setSerialPad] = useState(3);
   const [removeOriginal, setRemoveOriginal] = useState(false);
 
-  // 2-ex. Manual Increment
-  const [manualIncrement, setManualIncrement] = useState(false);
-  const [currentManualCount, setCurrentManualCount] = useState(1);
 
   // 3. Replace / Add / Trim
   const [replaceFrom, setReplaceFrom] = useState("");
@@ -94,7 +92,7 @@ function App() {
   const configRef = useRef({
     activeTab,
     fixedName, keepExt,
-    serialText, serialPosition, serialStart, serialPad, removeOriginal, manualIncrement, currentManualCount,
+    useSerialText, serialText, serialPosition, serialStart, serialPad, removeOriginal,
     replaceFrom, replaceTo, useRegex, addText, addPos, trimCount, trimPos,
     newExtension,
   });
@@ -103,23 +101,18 @@ function App() {
     configRef.current = {
       activeTab,
       fixedName, keepExt,
-      serialText, serialPosition, serialStart, serialPad, removeOriginal, manualIncrement, currentManualCount,
+      useSerialText, serialText, serialPosition, serialStart, serialPad, removeOriginal,
       replaceFrom, replaceTo, useRegex, addText, addPos, trimCount, trimPos,
       newExtension,
     };
   }, [
     activeTab, fixedName, keepExt,
-    serialText, serialPosition, serialStart, serialPad, removeOriginal, manualIncrement, currentManualCount,
+    useSerialText, serialText, serialPosition, serialStart, serialPad, removeOriginal,
     replaceFrom, replaceTo, useRegex, addText, addPos, trimCount, trimPos,
     newExtension,
   ]);
 
-  // Sync manual count with serial start
-  useEffect(() => {
-    if (!manualIncrement) {
-      setCurrentManualCount(serialStart);
-    }
-  }, [serialStart, manualIncrement]);
+
 
   // Auto-focus on Prefix input when Serial tab is active
   useEffect(() => {
@@ -136,14 +129,12 @@ function App() {
     const { activeTab } = cfg;
 
     const newLogs: LogEntry[] = [];
-    let currentSeq = cfg.manualIncrement ? cfg.currentManualCount : cfg.serialStart;
 
     for (let i = 0; i < paths.length; i++) {
         const filePath = paths[i];
         let cmd = {};
 
-        const num = cfg.manualIncrement ? currentSeq : cfg.serialStart + i;
-        if (cfg.manualIncrement) currentSeq++;
+        const num = cfg.serialStart + i;
 
         switch (activeTab) {
           case "fixed":
@@ -156,8 +147,8 @@ function App() {
             cmd = {
               mode: "Serial",
               config: {
-                prefix: cfg.serialPosition === "start" ? cfg.serialText : "",
-                suffix: cfg.serialPosition === "end" ? cfg.serialText : "",
+                text: cfg.useSerialText ? cfg.serialText : "",
+                position: cfg.serialPosition,
                 number: num,
                 pad: cfg.serialPad,
                 keep_ext: cfg.keepExt,
@@ -221,8 +212,12 @@ function App() {
 
     setLogs((prev) => [...newLogs, ...prev].slice(0, 50));
 
-    if (cfg.manualIncrement) {
-      setCurrentManualCount(currentSeq);
+    // Auto-increment serial start if we did serial renames
+    if (activeTab === "serial") {
+      const successCount = newLogs.filter((log) => log.success).length;
+      if (successCount > 0) {
+        setSerialStart((prev) => prev + successCount);
+      }
     }
   };
 
@@ -320,7 +315,7 @@ function App() {
         <div className="flex w-full">
           <TabButton id="replace" icon={<ArrowRightLeft size={18} />} label="置換" active={activeTab} onSelect={setActiveTab} />
           <TabButton id="serial" icon={<Hash size={18} />} label="連番付与" active={activeTab} onSelect={setActiveTab} />
-          <TabButton id="extension" icon={<FileSignature size={18} />} label="拡張子" active={activeTab} onSelect={setActiveTab} />
+          <TabButton id="extension" icon={<FileSignature size={18} />} label="拡張子変換" active={activeTab} onSelect={setActiveTab} />
         </div>
       </div>
 
@@ -357,19 +352,21 @@ function App() {
             {/* --- SERIAL --- */}
             {activeTab === "serial" && (
               <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-top-2 relative z-10">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex gap-4 items-end">
-                    <div className="flex-1 flex flex-col gap-2">
-                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">追加テキスト</label>
-                      <input
-                        ref={inputPrefixRef}
-                        type="text"
-                        value={serialText}
-                        onChange={(e) => setSerialText(e.target.value)}
-                        className="w-full pl-3 pr-3 h-[36px] bg-[#1a1b1e] border border-[#373a40] rounded-lg focus:outline-none focus:border-[#374458] transition-all"
-                        placeholder={serialPosition === "start" ? "Img_" : "_Img"}
-                      />
-                    </div>
+                <div className="flex gap-4 items-end">
+                  <label className="flex items-center gap-2 cursor-pointer select-none px-3 py-2 hover:bg-[#2c2e33] rounded-lg transition-colors border border-transparent hover:border-[#373a40] h-[36px] shrink-0">
+                    <input type="checkbox" checked={useSerialText} onChange={(e) => setUseSerialText(e.target.checked)} className="accent-[#374458] w-4 h-4" />
+                    <span className="text-sm text-gray-300 font-medium">テキスト追加</span>
+                  </label>
+                  <div className={`flex-1 flex gap-4 items-end transition-all duration-200 ${useSerialText ? "opacity-100" : "opacity-40 pointer-events-none"}`}>
+                    <input
+                      ref={inputPrefixRef}
+                      type="text"
+                      value={serialText}
+                      onChange={(e) => setSerialText(e.target.value)}
+                      className="flex-1 pl-3 pr-3 h-[36px] bg-[#1a1b1e] border border-[#373a40] rounded-lg focus:outline-none focus:border-[#374458] transition-all disabled:border-[#2d2d2d]"
+                      placeholder={serialPosition === "start" ? "Img_" : "_Img"}
+                      disabled={!useSerialText}
+                    />
                     <DropdownSelect
                       value={serialPosition}
                       onChange={(v: string) => setSerialPosition(v as "start" | "end")}
@@ -381,7 +378,7 @@ function App() {
                   </div>
                 </div>
 
-                <div className="h-px bg-[#373a40]" />
+                <div className="h-px bg-[#373a40] opacity-50" />
 
                 <div className="flex items-end gap-4">
                   <div className="flex flex-col gap-2">
@@ -408,14 +405,25 @@ function App() {
                       <input type="checkbox" checked={removeOriginal} onChange={(e) => setRemoveOriginal(e.target.checked)} className="accent-[#374458] w-4 h-4" />
                       <span className="text-sm text-gray-300">元の名前を残さない</span>
                     </label>
-                    <label className="flex items-center gap-2 cursor-pointer select-none px-3 py-1.5 hover:bg-[#2d2d2d] rounded-lg transition-colors">
-                      <input type="checkbox" checked={manualIncrement} onChange={(e) => setManualIncrement(e.target.checked)} className="accent-[#374458] w-4 h-4" />
-                      <div className="flex flex-col">
-                        <span className="text-sm text-gray-300">一つずつファイルを入れる</span>
-                        {manualIncrement && <span className="text-[10px] text-[#4b5f78] font-mono">Next: {currentManualCount}</span>}
-                      </div>
-                    </label>
                   </div>
+                </div>
+
+                {/* Live Preview */}
+                <div className="bg-[#1a1b1e] border border-[#373a40] rounded-lg px-4 py-2 flex items-center gap-3">
+                  <span className="text-[10px] text-gray-600 uppercase tracking-wider shrink-0">例:</span>
+                  <span className="font-mono text-sm text-gray-200">
+                    {(() => {
+                      const num = String(serialStart).padStart(serialPad, '0');
+                      const textNum = `${useSerialText ? serialText : ''}${num}`;
+                      if (removeOriginal) {
+                        return `${textNum}.ext`;
+                      } else if (serialPosition === 'start') {
+                        return `${textNum}photo.ext`;
+                      } else {
+                        return `photo${textNum}.ext`;
+                      }
+                    })()}
+                  </span>
                 </div>
               </div>
             )}
