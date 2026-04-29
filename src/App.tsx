@@ -15,6 +15,7 @@ import {
   Archive,
   Pencil,
   FileSignature,
+  RotateCcw,
 } from "lucide-react";
 
 // --- Types ---
@@ -132,7 +133,7 @@ function App() {
 
     for (let i = 0; i < paths.length; i++) {
         const filePath = paths[i];
-        let cmd = {};
+        let cmd: any;
 
         const num = cfg.serialStart + i;
 
@@ -246,7 +247,7 @@ function App() {
     return () => {
       unlistenPromise.then((unlisten) => unlisten());
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // --- Keyboard Event (Ctrl+V) ---
   useEffect(() => {
@@ -275,7 +276,7 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
 
 
@@ -376,7 +377,14 @@ function App() {
 
                 <div className="flex items-end gap-4">
                   <div className="flex flex-col gap-2">
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">開始番号</label>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">開始番号</label>
+                      {serialStart !== 1 && (
+                        <button onClick={() => setSerialStart(1)} className="text-[#5e7799] hover:text-white transition-colors" title="1にリセット">
+                          <RotateCcw size={12} />
+                        </button>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2 bg-[#1a1b1e] border border-[#373a40] rounded-lg px-2 h-[36px]">
                       <button onClick={() => setSerialStart(Math.max(0, serialStart - 1))} className="p-2 hover:text-white text-gray-500 transition-colors"><ChevronDown size={14} /></button>
                       <span className="font-mono w-4 text-center">{serialStart}</span>
@@ -579,15 +587,6 @@ function App() {
                 </span>
               </span>
               <span className="flex items-center gap-3">
-                {logs.length > 0 && !showLogs && (
-                  <span className="text-[10px] text-gray-600 font-normal normal-case flex items-center gap-2">
-                    最新:{" "}
-                    <span className={logs[0].success ? "text-green-500" : "text-red-500"}>
-                      {logs[0].status}
-                    </span>
-                  </span>
-                )}
-
               </span>
             </div>
           </button>
