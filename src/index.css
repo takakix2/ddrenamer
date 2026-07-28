@@ -1,4 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* Web フォントは使わない ＝ 起動のたびに外へ出る経路を持たない（完全オフラインで動く）。
+   以前は Google Fonts から Inter を @import していたが、実測すると
+   UI ラベルは全部日本語、数字/拡張子/ファイル名は font-mono、入力欄は weight 500 で、
+   Inter が実際に描いていたのは 400 のごく一部だけだった。同梱する価値が無いので外した。 */
 @import "tailwindcss";
 
 :root {
@@ -50,7 +53,7 @@
 
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--bg-primary);
