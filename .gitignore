@@ -31,5 +31,10 @@ package-lock.json
 src-tauri/target
 src-tauri/binaries
 
-# Screenshots
+# Screenshots（作業中に撮った画像をうっかり入れないため）
 *.png
+# ただしアプリのアイコンは成果物ではなくソース。
+# これを除外していたせいで fresh clone が generate_context! で必ずビルド失敗していた
+# （32x32.png が見つからない）。blackcube にはローカルに在ったので長く気づけなかった。
+!src-tauri/icons/**/*.png
+!src-tauri/icons/*.png
