@@ -71,8 +71,7 @@ style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'
 
 - ⚠️ **macOS 版の署名は adhoc**（`TeamIdentifier=not set`）。自分の Mac なら動くが、
   配ると Gatekeeper が「開発元を確認できません」と言う。Developer ID + notarize は未着手。
-- ⚠️ **macOS 版はまだ誰も起動していない。** m4air は GUI キャプチャが TCC で塞がれているので
-  目視確認に人の手が要る。**次に開く人が最初の目撃者。**
+- 🔴 **macOS 版は起動はするが UI が一切操作できない**（下の未解決バグを参照）。**配布不可。**
 
 ### macOS 版を焼く手順（m4air）
 
@@ -84,6 +83,66 @@ cd ~/dev/DDRenamer && git pull && bun run tauri build
 
 ⚠️ **clone は `git clone gitea:takaki2/DDRenamer.git`**。m4air の `~/.ssh/config` は
 `Host gitea` ＋ `IdentitiesOnly yes` なので、**生の `ssh://git@192.168.1.10:222/...` は鍵が選ばれず弾かれる**。
+
+---
+
+## 🔴 2026-07-29: macOS 版は UI が一切操作できない（未解決・最優先）
+
+Status: **open**
+Observed on: macOS 26.5.2 arm64（m4air）
+Build/commit: `1d89a15`（`.app` / `.dmg` とも）
+
+### Repro
+
+1. m4air で `bun run tauri build`
+2. `open src-tauri/target/release/bundle/macos/DDRenamer.app`
+3. ウィンドウは正常に表示される（描画は完全）
+
+### Actual
+
+**UI 全体が反応しない。** タイトルバーの − □ ✕ が押せず、ウィンドウをドラッグでも動かせず、
+**タブの切り替えも入力欄への文字入力もできない**（本人確認済み）。
+
+### Expected
+
+Linux 版と同じように操作できる。
+
+### 切り分け済み（やり直さなくてよい）
+
+| 仮説 | 結果 |
+|---|---|
+| 今日入れた CSP が IPC を止めている | ❌ **違う。** CSP を外しただけのビルド（`/tmp/DDRenamer-nocsp.app`）でも同じ |
+| Linux でも壊れている（＝プラットフォーム非依存） | ❌ **違う。** Linux release で ✕ を実際にクリック → アプリが終了する |
+| 親要素の `data-tauri-drag-region` がクリックを奪っている | ❌ **違う。** `tauri/src/window/scripts/drag.js` は `e.target.getAttribute()` で判定しており `closest()` ではない ＝ ボタンの上ではドラッグ判定にならない |
+| touch イベントリスナーの干渉（[discussion #11957](https://github.com/orgs/tauri-apps/discussions/11957)） | ❌ 該当しない。App.tsx は touch 系を使っていない（`pointer-events-none` が 1 箇所あるだけ） |
+
+⚠️ **CSP は無罪。** 今日が macOS の初ビルドなので「CSP が壊した」ではなく
+**元から macOS では動いていなかった**が正しい。
+
+### 最有力の仮説（未検証）
+
+`decorations: false` ＝ macOS では `NSWindowStyleMaskBorderless`。
+**borderless の NSWindow は既定で `canBecomeKeyWindow` が false** なので、
+キーウィンドウになれず**マウスもキー入力も受け取れない**。症状（UI 全体が無反応）と一致する。
+
+### 次にやること（m4air で・検証ビルドは用意済み）
+
+1. **`open /tmp/DDRenamer-decorations-true.app`** — `decorations: true` 以外は同一のビルド。
+   **これで操作できれば `decorations: false` が犯人**と確定する。⏱ これが最短の切り分け。
+2. 犯人と確定したら macOS だけ扱いを変える。`src-tauri/tauri.macos.conf.json` で
+   `titleBarStyle: "Overlay"` + `hiddenTitle: true`（ネイティブのトラフィックライトを残して
+   タイトルバーだけ透明にする）が定石。その場合 **独自の − □ ✕ は macOS では隠す**。
+3. console を見るなら **dev ビルド**（`bun run tauri dev`）＋ Safari の「開発」メニューから
+   Web Inspector。release は devtools が無効。
+
+### 用意してある検証ビルド（m4air の `/tmp`）
+
+| パス | 違い |
+|---|---|
+| `/tmp/DDRenamer-decorations-true.app` | `decorations: true`（**次に試すのはこれ**） |
+| `/tmp/DDRenamer-nocsp.app` | CSP 無し（試験済み・症状変わらず） |
+
+⚠️ `/tmp` なので再起動で消える。
 
 ---
 
@@ -115,7 +174,8 @@ cd ~/dev/DDRenamer && git pull && bun run tauri build
 
 ## Follow-Ups
 
-- ⏸ **macOS 版の目視確認**（上記のとおり未実施）と、**署名 / notarize の方針**。
+- 🔴 **macOS 版の UI 無反応**（上記の未解決バグ・最優先）。**これが直るまで macOS 版は配れない。**
+- ⏸ **署名 / notarize の方針**（現状 adhoc）。UI の問題が片付いてから。
 - ⏸ **Tailwind v4 を使っている。** `~/dev/CLAUDE.md` は「Tailwind は放棄済・新規 UI は
   `Lethe_UI_Kit` に揃える」なので、移行するか塩漬けにするかの判断が要る（**判断していない**）。
 - ⏸ **`bun run tauri dev` の起動確認は XWayland 経由でしかしていない**
