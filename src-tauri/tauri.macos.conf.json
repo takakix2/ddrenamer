@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "windows": [
+      {
+        "title": "DDRenamer",
+        "width": 680,
+        "height": 638,
+        "resizable": true,
+        "maximizable": false,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": 13,
+          "y": 18
+        }
+      }
+    ]
+  }
+}

@@ -18,6 +18,12 @@ import {
   RotateCcw,
 } from "lucide-react";
 
+// macOS draws the window controls itself (titleBarStyle: "Overlay" in
+// tauri.macos.conf.json), so the titlebar strip only renders the app name and
+// the ─ □ ✕ buttons on the platforms that have no native ones. The strip stays
+// on every platform because it is also the drag region.
+const isMac = navigator.userAgent.includes("Macintosh");
+
 // --- Types ---
 
 type RenameMode = "fixed" | "serial" | "replace" | "add" | "trim" | "extension";
@@ -282,20 +288,24 @@ function App() {
 
   return (
     <div className="flex flex-col h-screen w-screen bg-[#1e1e1e] text-gray-300 font-sans selection:bg-[#264f78] selection:text-white overflow-hidden">
-      {/* CSD Titlebar */}
+      {/* CSD Titlebar — on macOS the native traffic lights sit here instead */}
       <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '32px', background: '#1e1e1e', borderBottom: '1px solid #2d2d2d', flexShrink: 0, userSelect: 'none', WebkitUserSelect: 'none', cursor: 'grab' }}>
-        <span data-tauri-drag-region style={{ paddingLeft: '12px', fontSize: '12px', color: '#888', fontWeight: 500 }}>DDRenamer</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-          <button onClick={handleMinimize} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', width: '32px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', transition: 'background 0.15s' }}>
-            <span style={{ fontSize: '14px', lineHeight: 1 }}>─</span>
-          </button>
-          <button onClick={handleToggleMaximize} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', width: '32px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', transition: 'background 0.15s' }}>
-            <span style={{ fontSize: '10px', lineHeight: 1 }}>{isMaximized ? '❐' : '□'}</span>
-          </button>
-          <button onClick={handleClose} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', width: '32px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', transition: 'background 0.15s' }}>
-            <span style={{ fontSize: '12px', lineHeight: 1 }}>✕</span>
-          </button>
-        </div>
+        {!isMac && (
+          <>
+            <span data-tauri-drag-region style={{ paddingLeft: '12px', fontSize: '12px', color: '#888', fontWeight: 500 }}>DDRenamer</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+              <button onClick={handleMinimize} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', width: '32px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', transition: 'background 0.15s' }}>
+                <span style={{ fontSize: '14px', lineHeight: 1 }}>─</span>
+              </button>
+              <button onClick={handleToggleMaximize} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', width: '32px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', transition: 'background 0.15s' }}>
+                <span style={{ fontSize: '10px', lineHeight: 1 }}>{isMaximized ? '❐' : '□'}</span>
+              </button>
+              <button onClick={handleClose} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', width: '32px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', transition: 'background 0.15s' }}>
+                <span style={{ fontSize: '12px', lineHeight: 1 }}>✕</span>
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Header / Tabs - 2 Rows */}

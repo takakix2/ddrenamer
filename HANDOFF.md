@@ -3,7 +3,8 @@
 > このファイルは**現在の状態**を持つ。経緯（なぜそうなったか）は
 > `~/dev/agent-guidelines/logs/*-ddrenamer.md` にある。
 
-最終更新: 2026-07-29 / 対応コミット: `1d89a15`
+最終更新: 2026-07-29（m4air セッション）
+直近の変更: macOS の UI 無反応を修正（`1d89a15` まで壊れていた・下記の解決済みセクション）
 
 ---
 
@@ -71,7 +72,8 @@ style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'
 
 - ⚠️ **macOS 版の署名は adhoc**（`TeamIdentifier=not set`）。自分の Mac なら動くが、
   配ると Gatekeeper が「開発元を確認できません」と言う。Developer ID + notarize は未着手。
-- 🔴 **macOS 版は起動はするが UI が一切操作できない**（下の未解決バグを参照）。**配布不可。**
+- ✅ **macOS 版の UI 無反応は解決**（下記セクション）。`1d89a15` の `.app` / `.dmg` は
+  **操作不能なので破棄すること**。macOS 版は修正後に焼き直しが要る。
 
 ### macOS 版を焼く手順（m4air）
 
@@ -86,63 +88,84 @@ cd ~/dev/DDRenamer && git pull && bun run tauri build
 
 ---
 
-## 🔴 2026-07-29: macOS 版は UI が一切操作できない（未解決・最優先）
+## ✅ 2026-07-29: macOS 版の UI 無反応 — 解決（犯人は `decorations: false`）
 
-Status: **open**
+Status: **resolved**（m4air で修正・実機で操作確認済み）
 Observed on: macOS 26.5.2 arm64（m4air）
-Build/commit: `1d89a15`（`.app` / `.dmg` とも）
+Broken in: `1d89a15`（`.app` / `.dmg` とも）
 
-### Repro
+### 症状
 
-1. m4air で `bun run tauri build`
-2. `open src-tauri/target/release/bundle/macos/DDRenamer.app`
-3. ウィンドウは正常に表示される（描画は完全）
+**UI 全体が反応しない。** − □ ✕ が押せず、ドラッグでも動かせず、
+**タブ切り替えも文字入力もできない**。ウィンドウの描画だけは完全。
 
-### Actual
-
-**UI 全体が反応しない。** タイトルバーの − □ ✕ が押せず、ウィンドウをドラッグでも動かせず、
-**タブの切り替えも入力欄への文字入力もできない**（本人確認済み）。
-
-### Expected
-
-Linux 版と同じように操作できる。
-
-### 切り分け済み（やり直さなくてよい）
-
-| 仮説 | 結果 |
-|---|---|
-| 今日入れた CSP が IPC を止めている | ❌ **違う。** CSP を外しただけのビルド（`/tmp/DDRenamer-nocsp.app`）でも同じ |
-| Linux でも壊れている（＝プラットフォーム非依存） | ❌ **違う。** Linux release で ✕ を実際にクリック → アプリが終了する |
-| 親要素の `data-tauri-drag-region` がクリックを奪っている | ❌ **違う。** `tauri/src/window/scripts/drag.js` は `e.target.getAttribute()` で判定しており `closest()` ではない ＝ ボタンの上ではドラッグ判定にならない |
-| touch イベントリスナーの干渉（[discussion #11957](https://github.com/orgs/tauri-apps/discussions/11957)） | ❌ 該当しない。App.tsx は touch 系を使っていない（`pointer-events-none` が 1 箇所あるだけ） |
-
-⚠️ **CSP は無罪。** 今日が macOS の初ビルドなので「CSP が壊した」ではなく
-**元から macOS では動いていなかった**が正しい。
-
-### 最有力の仮説（未検証）
+### 原因
 
 `decorations: false` ＝ macOS では `NSWindowStyleMaskBorderless`。
 **borderless の NSWindow は既定で `canBecomeKeyWindow` が false** なので、
-キーウィンドウになれず**マウスもキー入力も受け取れない**。症状（UI 全体が無反応）と一致する。
+キーウィンドウになれず**入力が WebView まで降りてこない**。
 
-### 次にやること（m4air で・検証ビルドは用意済み）
+Accessibility API で機械的に裏を取った（当時 GUI キャプチャが TCC で使えなかったため）:
 
-1. **`open /tmp/DDRenamer-decorations-true.app`** — `decorations: true` 以外は同一のビルド。
-   **これで操作できれば `decorations: false` が犯人**と確定する。⏱ これが最短の切り分け。
-2. 犯人と確定したら macOS だけ扱いを変える。`src-tauri/tauri.macos.conf.json` で
-   `titleBarStyle: "Overlay"` + `hiddenTitle: true`（ネイティブのトラフィックライトを残して
-   タイトルバーだけ透明にする）が定石。その場合 **独自の − □ ✕ は macOS では隠す**。
-3. console を見るなら **dev ビルド**（`bun run tauri dev`）＋ Safari の「開発」メニューから
-   Web Inspector。release は devtools が無効。
+| ビルド | `AXCloseButton` | `AXFocusedUIElement` |
+|---|---|---|
+| `decorations: false` | nil | **AXWindow** ← WebView にフォーカスが渡らない |
+| `decorations: true` | present | **AXWebArea** |
 
-### 用意してある検証ビルド（m4air の `/tmp`）
+⚠️ **CSP は無罪**（CSP を外しただけのビルドでも同症状）。**Linux は正常**。
+今日が macOS の初ビルドなので「今日の変更が壊した」ではなく
+**リポ作成以来ずっと macOS では動いていなかった**が正しい。
 
-| パス | 違い |
-|---|---|
-| `/tmp/DDRenamer-decorations-true.app` | `decorations: true`（**次に試すのはこれ**） |
-| `/tmp/DDRenamer-nocsp.app` | CSP 無し（試験済み・症状変わらず） |
+### 直し方
 
-⚠️ `/tmp` なので再起動で消える。
+**`src-tauri/tauri.macos.conf.json`（新規）** で macOS だけ挙動を変える:
+
+```json
+"decorations": true, "titleBarStyle": "Overlay", "hiddenTitle": true,
+"trafficLightPosition": { "x": 13, "y": 18 }
+```
+
+**`src/App.tsx`** は `isMac`（`navigator.userAgent.includes("Macintosh")`）で
+**帯の中身だけ**を出し分ける（macOS ではタイトル文字と − □ ✕ を描画しない）。
+
+📌 **32px の帯そのものは全プラットフォームで残す。** ドラッグ領域であると同時に、
+**設定ボタンを置ける唯一の共通の土地**だから（i18n / テーマ の入口が今後要る）。
+素のネイティブタイトルバーにすると macOS だけこの土地を失う。
+
+判定を実行時にしたので **`dist` は全 OS 共通**（クロスビルドで取り違える余地がない）。
+
+### ⚠️ `tauri.macos.conf.json` は `windows` 配列を丸ごと持つ ＝ 二重管理
+
+プラットフォーム別 config は **JSON Merge Patch (RFC 7396)** で合成され、
+**配列は要素単位ではなく丸ごと置換**される。よって `title` / `width` / `height` /
+`resizable` / `maximizable` を macOS 側にも**書き写してある**。
+🚨 **ウィンドウサイズ等を変えるときは 2 ファイル両方**を直すこと。片方だけ直すと
+macOS だけ古い値のままになり、しかもビルドは通る。
+
+### `trafficLightPosition` の `y` は「ボタンの座標」ではない
+
+tao の実装（`platform_impl/macos/view.rs: inset_traffic_lights`）は
+
+```
+title_bar_frame_height = closeButton.height + y
+```
+
+でコンテナ高を決めるだけ。AppKit は原点が左下なので、実際に効くのは
+**ウィンドウ上端からボタン上端までの隙間 = y − (ボタンの元の下端オフセット `b`)**。
+
+`y=9` のとき AX 実測で隙間 **−1px**（上端からはみ出していた）→ `b=10` と判明。
+32px の帯に 16px のボタン（AX フレーム）を中央に置く `隙間=8` から **`y=18`** を逆算し、
+焼き直して `dy=8` を再測定して一致を確認した。ネイティブの Terminal.app も `dy=8`。
+
+⚠️ Overlay の既知の制約（tauri のドキュメント記載）:
+**ウィンドウが非フォーカスのときは drag region で動かせない**（[tauri#4316](https://github.com/tauri-apps/tauri/issues/4316)）。
+
+### 🚨 m4air では GUI キャプチャの TCC 主体は **tmux**
+
+claude は tmux セッション内で動いており、tmux サーバの親は launchd（＝ターミナルから独立）。
+そのため **画面収録の許可はターミナルアプリではなく `/opt/homebrew/bin/tmux` に紐づく**。
+Alacritty / Ghostty を許可しただけでは足りず、実行時に **"tmux" 名義のダイアログ**が出る。
+**許可すれば再起動なしで即座に撮れる**（tmux サーバを落とす必要はない ＝ セッションは死なない）。
 
 ---
 
@@ -174,8 +197,15 @@ Linux 版と同じように操作できる。
 
 ## Follow-Ups
 
-- 🔴 **macOS 版の UI 無反応**（上記の未解決バグ・最優先）。**これが直るまで macOS 版は配れない。**
-- ⏸ **署名 / notarize の方針**（現状 adhoc）。UI の問題が片付いてから。
+- 🔶 **macOS 版の焼き直しと配布判断。** UI 無反応は直ったので配れる状態になったが、
+  **署名は adhoc のまま**（次項）。`--bundles app` でしか焼いていないので **dmg は未生成**。
+- 🔶 **設定画面の入口と i18n / テーマ。** 帯の右側を席として空けてある。
+  フッターのログバーにも `justify-between` の**空の右スロットが既にある**（`App.tsx`）が、
+  ⚠️ バー全体が `<button>` なので歯車を入れるなら div + 個別ボタンへの組み替えが要る。
+  macOS では `⌘,` のネイティブメニュー項目も期待される。
+  🚨 **着手前に下の Tailwind / Lethe_UI_Kit の判断を先に済ませること** ——
+  テーマ機構は UI 基盤に最も強く依存するので、Tailwind の上に作ると移行時に作り直しになる。
+- ⏸ **署名 / notarize の方針**（現状 adhoc）。配る段になったら Developer ID が要る。
 - ⏸ **Tailwind v4 を使っている。** `~/dev/CLAUDE.md` は「Tailwind は放棄済・新規 UI は
   `Lethe_UI_Kit` に揃える」なので、移行するか塩漬けにするかの判断が要る（**判断していない**）。
 - ⏸ **`bun run tauri dev` の起動確認は XWayland 経由でしかしていない**
@@ -200,3 +230,26 @@ unshare -rn bash -c 'ip link set lo up; exec env GDK_BACKEND=x11 ./src-tauri/tar
 
 ⚠️ **CSP のカナリアだけはネット有りで撃つこと。** オフラインだと「CSP がブロックした」と
 「そもそも繋がらない」が同じ絵になり、何も証明できない。
+
+### macOS 側（m4air・2026-07-29 に確立）
+
+`xdotool` / `import` は無い。代わりに **Accessibility API と `screencapture -R`** を使う。
+
+```bash
+open src-tauri/target/release/bundle/macos/DDRenamer.app
+PID=$(pgrep -f 'bundle/macos/DDRenamer.app')
+
+# ウィンドウ矩形・フォーカス・トラフィックライト位置を「測る」
+osascript -e "tell application \"System Events\" to tell (first process whose unix id is $PID) \
+  to get {position, size} of first window"
+
+# ウィンドウ領域だけ撮る（全画面は他の作業が写り込む）
+screencapture -x -R "<x>,<y>,<w>,<h>" shot.png
+```
+
+💡 **入力を受け取れているかは目で見なくても分かる。**
+`AXFocusedUIElement` が **`AXWebArea`** なら WebView に届いている。**`AXWindow`** で止まっていたら
+ウィンドウがキーになれていない。`AXCloseButton` が `nil` かどうかで `decorations` の実効値も読める。
+
+⚠️ WKWebView の **DOM は AX ツリーに出てこない**（`AXManualAccessibility` が要る）ので、
+ボタンやテキストフィールド単位の走査はできない。**ウィンドウ層までが AX で測れる範囲。**
