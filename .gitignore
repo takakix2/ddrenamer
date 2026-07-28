@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# パッケージマネージャは bun に一本化（bun.lock が正）。
+# npm を叩くと package-lock.json が復活して二重管理に戻るので明示的に無視する。
+package-lock.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

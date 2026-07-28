@@ -52,18 +52,21 @@ Rustの堅牢性とTauriの軽量さを備えた高機能リネームツール�
 ## 📦 ビルドとインストール
 
 ### 前提条件
-- Node.js (v18+)
+- [Bun](https://bun.sh/)
 - Rust (Cargo)
+
+> パッケージマネージャは **bun に一本化**しています（`bun.lock` が正）。
+> m4air には node が入っていないため、npm を正にすると別マシンでビルドできません。
 
 ### 開発モード起動
 ```bash
-npm install
-npm run tauri dev
+bun install
+bun run tauri dev
 ```
 
 ### リリースビルド
 ```bash
-npm run tauri build
+bun run tauri build
 ```
 生成されたバイナリ (`src-tauri/target/release/bundle/`) を使用してください。
 
