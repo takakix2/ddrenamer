@@ -24,6 +24,7 @@ import {
 // 選択メニューは Lethe_UI_Kit の共有コンポーネント（`src/ui-kit` は symlink）。
 // 自前の DropdownSelect を持っていたが、Kit のものと同じ物を二重に育てる形だったので畳んだ。
 import { CustomSelect } from "./ui-kit/components/tsx/CustomSelect";
+import WindowResizeHandles from "./WindowResizeHandles";
 
 // macOS draws the window controls itself (titleBarStyle: "Overlay" in
 // tauri.macos.conf.json), so the titlebar strip only renders the app name and
@@ -320,6 +321,11 @@ function App() {
 
   return (
     <div className="app-shell">
+      {/* 窓の縁（decorations:false には縁が無いので自前）。
+          ⚠️ macOS は `decorations: true` ＝ **ネイティブの縁が既に在る**ので置かない。
+          置くと透明な板がネイティブの当たり判定より前に出て、かえって邪魔になる。 */}
+      {!isMac && <WindowResizeHandles />}
+
       {/* CSD Titlebar — on macOS the native traffic lights sit here instead */}
       <div className="titlebar" data-tauri-drag-region onPointerDown={handleDrag}>
         {!isMac && (

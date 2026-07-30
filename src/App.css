@@ -11,6 +11,97 @@
      真偽値 → `.toggle-switch` + `.toggle-slider` / 選択 → `.custom-select-*`
    ─────────────────────────────────────────────────────────────── */
 
+/* ── 窓のリサイズハンドル ─────────────────────────────────────
+   `decorations: false` の窓には縁が無いので自前で置く（`WindowResizeHandles.tsx`）。
+   ⚠️ **カーソルは native キーワードのみ。** `url()` の png は WebKitGTK が
+   GDK_SCALE でスケールせず、HiDPI で極小になる。
+   ─────────────────────────────────────────────────────────── */
+:root {
+  --resize-edge: 8px;    /* 辺の掴み幅 */
+  --resize-corner: 18px; /* 角の一辺 */
+  /* タイトルバー右の − □ ✕（40px × 3）。ここに掴みを重ねるとボタンが死ぬので避ける。 */
+  --titlebar-controls: 120px;
+}
+
+.resize-handles {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none; /* 器は透過。子だけが受ける */
+}
+
+.resize-handle {
+  position: fixed;
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 辺 —— 角のぶんを両端から空ける */
+.resize-handle--north,
+.resize-handle--south {
+  height: var(--resize-edge);
+  cursor: ns-resize;
+}
+
+/* ⚠️ 上辺は **ボタンの手前で止める**（120px + 角 18px）。
+   ここを全幅にすると ✕ の上端に透明な板が乗って押せなくなる。 */
+.resize-handle--north {
+  top: 0;
+  left: var(--resize-corner);
+  right: calc(var(--titlebar-controls) + var(--resize-corner));
+}
+
+.resize-handle--south {
+  bottom: 0;
+  left: var(--resize-corner);
+  right: var(--resize-corner);
+}
+
+.resize-handle--west,
+.resize-handle--east {
+  width: var(--resize-edge);
+  top: var(--resize-corner);
+  bottom: var(--resize-corner);
+  cursor: ew-resize;
+}
+
+.resize-handle--west { left: 0; }
+.resize-handle--east { right: 0; }
+
+/* 角 */
+.resize-handle--north-west,
+.resize-handle--north-east,
+.resize-handle--south-west,
+.resize-handle--south-east {
+  width: var(--resize-corner);
+  height: var(--resize-corner);
+}
+
+.resize-handle--north-west { top: 0; left: 0; cursor: nwse-resize; }
+.resize-handle--south-east { right: 0; bottom: 0; cursor: nwse-resize; }
+.resize-handle--south-west { bottom: 0; left: 0; cursor: nesw-resize; }
+
+/* ⚠️ 右上の角は **ボタンの左隣**に逃がす（真の角に置くと ✕ を覆う）。
+   結果として「右上の角そのもの」からはリサイズできない —— Tabula も同じ妥協。 */
+.resize-handle--north-east {
+  top: 0;
+  right: var(--titlebar-controls);
+  cursor: nesw-resize;
+}
+
+/* ドラッグ中はポインタが縁から外れてもカーソルを保つ。 */
+body.is-resizing,
+body.is-resizing * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+body.is-resizing-ew, body.is-resizing-ew * { cursor: ew-resize !important; }
+body.is-resizing-ns, body.is-resizing-ns * { cursor: ns-resize !important; }
+body.is-resizing-nwse, body.is-resizing-nwse * { cursor: nwse-resize !important; }
+body.is-resizing-nesw, body.is-resizing-nesw * { cursor: nesw-resize !important; }
+
 /* ── シェル ────────────────────────────────────────────────── */
 .app-shell {
   display: flex;
