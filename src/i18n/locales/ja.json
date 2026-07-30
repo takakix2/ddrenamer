@@ -1,0 +1,64 @@
+{
+  "_lang_name": "日本語",
+  "titlebar": {
+    "minimize": "最小化",
+    "maximize": "最大化",
+    "restore": "元のサイズに戻す",
+    "close": "閉じる"
+  },
+  "tabs": {
+    "fixed": "リネーム",
+    "add": "追加",
+    "trim": "削除",
+    "replace": "置換",
+    "serial": "連番付与",
+    "extension": "拡張子変換"
+  },
+  "position": {
+    "start": "先頭 (Prefix)",
+    "end": "末尾 (Suffix)"
+  },
+  "fixed": {
+    "keepExt": "拡張子維持"
+  },
+  "serial": {
+    "useText": "テキスト追加",
+    "startNumber": "開始番号",
+    "resetToOne": "1にリセット",
+    "digits": "桁数",
+    "dropOriginal": "元の名前を残さない",
+    "exampleLabel": "例:"
+  },
+  "replace": {
+    "searchLabel": "検索する文字列",
+    "searchPlaceholder": "検索...",
+    "replaceLabel": "置換後の文字列",
+    "replacePlaceholder": "置換...",
+    "useRegex": "正規表現を使用"
+  },
+  "trim": {
+    "sentence": "<pos></pos><t1>から</t1><count></count><t2>文字削除する</t2>"
+  },
+  "extension": {
+    "placeholder": "jpg, png, txt...",
+    "note": "ドット不要"
+  },
+  "dropzone": {
+    "title": "ファイルをここにドロップ",
+    "hint": "自動的に処理が開始されます"
+  },
+  "logbar": {
+    "title": "実行ログ",
+    "empty": "履歴はありません"
+  },
+  "settings": {
+    "open": "設定",
+    "title": "設定",
+    "close": "閉じる",
+    "appearance": "外観",
+    "theme": "テーマ",
+    "themeDesc": "アプリケーションの配色",
+    "language": "UI 言語",
+    "languageDesc": "インターフェースの表示言語"
+  }
+}

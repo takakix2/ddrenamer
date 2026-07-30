@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, type ReactNode } from "react";
+import { useState, useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useTranslation, Trans } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -19,24 +20,26 @@ import {
   Square,
   Copy,
   X,
+  Settings,
 } from "lucide-react";
 
 // 選択メニューは Lethe_UI_Kit の共有コンポーネント（`src/ui-kit` は symlink）。
 // 自前の DropdownSelect を持っていたが、Kit のものと同じ物を二重に育てる形だったので畳んだ。
 import { CustomSelect } from "./ui-kit/components/tsx/CustomSelect";
 import WindowResizeHandles from "./WindowResizeHandles";
+import SettingsModal from "./SettingsModal";
+import { getInitialTheme, saveTheme, type Theme } from "./theme";
+// ⚠️ ログの時刻だけは **hook ではなく singleton** から言語を読む。`processFiles` は
+// deps `[]` の effect に捕まる（設定を `configRef` で渡しているのはそのため）ので、
+// hook 由来の値を入れると「第 1 レンダーの値を握った関数」になる。実体は同じインスタンスで
+// 結果も正しいが、それは**読んだ人には分からない**し lint も鳴る。意図を素直に書く。
+import i18nInstance from "./i18n/config";
 
 // macOS draws the window controls itself (titleBarStyle: "Overlay" in
 // tauri.macos.conf.json), so the titlebar strip only renders the app name and
 // the ─ □ ✕ buttons on the platforms that have no native ones. The strip stays
 // on every platform because it is also the drag region.
 const isMac = navigator.userAgent.includes("Macintosh");
-
-// 先頭/末尾はこのアプリで 3 回出てくる同じ選択肢。1 箇所で持つ。
-const POSITION_OPTIONS = [
-  { value: "start", label: "先頭 (Prefix)" },
-  { value: "end", label: "末尾 (Suffix)" },
-];
 
 // --- Types ---
 
@@ -58,11 +61,35 @@ function nextLogId(): string {
 // --- App ---
 
 function App() {
+  const { t } = useTranslation();
+
   const [activeTab, setActiveTab] = useState<RenameMode>("fixed");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [showLogs, setShowLogs] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+
+  const handleThemeChange = (next: Theme) => {
+    setTheme(next);
+    saveTheme(next); // localStorage への保存と `data-theme` の適用はここ 1 箇所
+  };
+
+  /**
+   * 先頭/末尾はこのアプリで 3 回出てくる同じ選択肢。
+   *
+   * 🚨 **モジュールスコープの定数にしてはいけない。** `t()` は言語で変わるので、
+   * 定数のまま持つと**言語を切り替えてもこの 3 つのセレクタだけ古い言語で残る**
+   * （しかも他が全部切り替わるので、見落とすと「たまたま訳し忘れ」に見える）。
+   */
+  const positionOptions = useMemo(
+    () => [
+      { value: "start", label: t("position.start") },
+      { value: "end", label: t("position.end") },
+    ],
+    [t],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -229,13 +256,11 @@ function App() {
           newLogs.unshift({
             id: nextLogId(),
             path: res.path,
-            status:
-              res.status === "Success"
-                ? res.new_name
-                  ? `-> ${res.new_name}`
-                  : "成功"
-                : res.status,
-            timestamp: new Date().toLocaleTimeString(),
+            // 📌 **ログの status は英語で固定**（Rust `lib.rs` が返す機械の値）。UI クロームとは
+            // 別のレーンなので i18n しない。`new_name` が在るのは Success のときだけなので、
+            // 「Success かつ new_name 無し」の分岐は畳んで status をそのまま出す。
+            status: res.new_name ? `-> ${res.new_name}` : res.status,
+            timestamp: new Date().toLocaleTimeString(i18nInstance.language),
             success: res.status === "Success",
           });
         } catch (e: unknown) {
@@ -244,7 +269,7 @@ function App() {
             id: nextLogId(),
             path: filePath,
             status: `Error: ${message}`,
-            timestamp: new Date().toLocaleTimeString(),
+            timestamp: new Date().toLocaleTimeString(i18nInstance.language),
             success: false,
           });
         }
@@ -291,12 +316,22 @@ function App() {
   // --- Keyboard Event (Ctrl+V) ---
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
+      const modifier = e.ctrlKey || e.metaKey;
+
+      // ⌘, / Ctrl+, で設定。⚠️ **入力欄の early-return より前**に置く ——
+      // macOS の ⌘, は「どこにフォーカスが在っても効く」のが標準の作法で、
+      // 入力中だけ効かないと壊れて見える。
+      if (modifier && e.key === ',') {
+        e.preventDefault();
+        setShowSettings((prev) => !prev);
+        return;
+      }
+
       // ignore if input is focused
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
 
-      const modifier = e.ctrlKey || e.metaKey;
       if (modifier && e.key.toLowerCase() === 'v') {
         e.preventDefault();
         try {
@@ -332,13 +367,13 @@ function App() {
           <>
             <span className="titlebar-title" data-tauri-drag-region>DDRenamer</span>
             <div className="titlebar-buttons">
-              <button className="titlebar-btn" onClick={handleMinimize} title="最小化">
+              <button className="titlebar-btn" onClick={handleMinimize} title={t("titlebar.minimize")}>
                 <Minus size={16} />
               </button>
-              <button className="titlebar-btn" onClick={handleToggleMaximize} title={isMaximized ? "元のサイズに戻す" : "最大化"}>
+              <button className="titlebar-btn" onClick={handleToggleMaximize} title={isMaximized ? t("titlebar.restore") : t("titlebar.maximize")}>
                 {isMaximized ? <Copy size={13} /> : <Square size={13} />}
               </button>
-              <button className="titlebar-btn close" onClick={handleClose} title="閉じる">
+              <button className="titlebar-btn close" onClick={handleClose} title={t("titlebar.close")}>
                 <X size={16} />
               </button>
             </div>
@@ -350,15 +385,15 @@ function App() {
       <div className="mode-tabs">
         {/* Row 1: リネーム, 追加, 削除 */}
         <div className="mode-tabs-row">
-          <TabButton id="fixed" icon={<Pencil size={18} />} label="リネーム" active={activeTab} onSelect={setActiveTab} />
-          <TabButton id="add" icon={<List size={18} />} label="追加" active={activeTab} onSelect={setActiveTab} />
-          <TabButton id="trim" icon={<Archive size={18} />} label="削除" active={activeTab} onSelect={setActiveTab} />
+          <TabButton id="fixed" icon={<Pencil size={18} />} label={t("tabs.fixed")} active={activeTab} onSelect={setActiveTab} />
+          <TabButton id="add" icon={<List size={18} />} label={t("tabs.add")} active={activeTab} onSelect={setActiveTab} />
+          <TabButton id="trim" icon={<Archive size={18} />} label={t("tabs.trim")} active={activeTab} onSelect={setActiveTab} />
         </div>
         {/* Row 2: 置換, 連番付与, 拡張子 */}
         <div className="mode-tabs-row">
-          <TabButton id="replace" icon={<ArrowRightLeft size={18} />} label="置換" active={activeTab} onSelect={setActiveTab} />
-          <TabButton id="serial" icon={<Hash size={18} />} label="連番付与" active={activeTab} onSelect={setActiveTab} />
-          <TabButton id="extension" icon={<FileSignature size={18} />} label="拡張子変換" active={activeTab} onSelect={setActiveTab} />
+          <TabButton id="replace" icon={<ArrowRightLeft size={18} />} label={t("tabs.replace")} active={activeTab} onSelect={setActiveTab} />
+          <TabButton id="serial" icon={<Hash size={18} />} label={t("tabs.serial")} active={activeTab} onSelect={setActiveTab} />
+          <TabButton id="extension" icon={<FileSignature size={18} />} label={t("tabs.extension")} active={activeTab} onSelect={setActiveTab} />
         </div>
       </div>
 
@@ -384,7 +419,7 @@ function App() {
                       <input type="checkbox" checked={keepExt} onChange={(e) => setKeepExt(e.target.checked)} />
                       <span className="toggle-slider" />
                     </span>
-                    <span>拡張子維持</span>
+                    <span>{t("fixed.keepExt")}</span>
                   </label>
                 </div>
               </div>
@@ -399,7 +434,7 @@ function App() {
                       <input type="checkbox" checked={useSerialText} onChange={(e) => setUseSerialText(e.target.checked)} />
                       <span className="toggle-slider" />
                     </span>
-                    <span>テキスト追加</span>
+                    <span>{t("serial.useText")}</span>
                   </label>
                   <div className={`field-row field-grow field-fade ${useSerialText ? "" : "off"}`}>
                     <input
@@ -415,7 +450,7 @@ function App() {
                       className="select-fixed"
                       value={serialPosition}
                       onChange={(v: string) => setSerialPosition(v as "start" | "end")}
-                      options={POSITION_OPTIONS}
+                      options={positionOptions}
                     />
                   </div>
                 </div>
@@ -425,9 +460,9 @@ function App() {
                 <div className="field-row">
                   <div className="field-col">
                     <span className="field-label">
-                      開始番号
+                      {t("serial.startNumber")}
                       {serialStart !== 1 && (
-                        <button className="stepper-btn" onClick={() => setSerialStart(1)} title="1にリセット">
+                        <button className="stepper-btn" onClick={() => setSerialStart(1)} title={t("serial.resetToOne")}>
                           <RotateCcw size={12} />
                         </button>
                       )}
@@ -439,7 +474,7 @@ function App() {
                     </div>
                   </div>
                   <div className="field-col">
-                    <span className="field-label">桁数</span>
+                    <span className="field-label">{t("serial.digits")}</span>
                     <div className="stepper">
                       <button className="stepper-btn" onClick={() => setSerialPad(Math.max(1, serialPad - 1))}><ChevronDown size={14} /></button>
                       <span className="stepper-value">{serialPad}</span>
@@ -454,13 +489,13 @@ function App() {
                       <input type="checkbox" checked={removeOriginal} onChange={(e) => setRemoveOriginal(e.target.checked)} />
                       <span className="toggle-slider" />
                     </span>
-                    <span>元の名前を残さない</span>
+                    <span>{t("serial.dropOriginal")}</span>
                   </label>
                 </div>
 
                 {/* Live Preview */}
                 <div className="preview-chip">
-                  <span className="preview-chip-label">例:</span>
+                  <span className="preview-chip-label">{t("serial.exampleLabel")}</span>
                   <span className="preview-chip-value">
                     {(() => {
                       const num = String(serialStart).padStart(serialPad, '0');
@@ -482,23 +517,23 @@ function App() {
             {activeTab === "replace" && (
               <div className="field-stack animate-in fade-in slide-in-from-top-2">
                 <div className="form-group">
-                  <label>検索する文字列</label>
+                  <label>{t("replace.searchLabel")}</label>
                   <input
                     type="text"
                     value={replaceFrom}
                     onChange={(e) => setReplaceFrom(e.target.value)}
                     className="lethe-input compact"
-                    placeholder="検索..."
+                    placeholder={t("replace.searchPlaceholder")}
                   />
                 </div>
                 <div className="form-group">
-                  <label>置換後の文字列</label>
+                  <label>{t("replace.replaceLabel")}</label>
                   <input
                     type="text"
                     value={replaceTo}
                     onChange={(e) => setReplaceTo(e.target.value)}
                     className="lethe-input compact"
-                    placeholder="置換..."
+                    placeholder={t("replace.replacePlaceholder")}
                   />
                 </div>
                 <label className="check-row">
@@ -506,7 +541,7 @@ function App() {
                     <input type="checkbox" checked={useRegex} onChange={(e) => setUseRegex(e.target.checked)} />
                     <span className="toggle-slider" />
                   </span>
-                  <span>正規表現を使用</span>
+                  <span>{t("replace.useRegex")}</span>
                 </label>
               </div>
             )}
@@ -526,28 +561,44 @@ function App() {
                     className="select-fixed"
                     value={addPos}
                     onChange={(v: string) => setAddPos(v as "start" | "end")}
-                    options={POSITION_OPTIONS}
+                    options={positionOptions}
                   />
                 </div>
               </div>
             )}
 
-            {/* --- TRIM (DELETE) --- */}
+            {/* --- TRIM (DELETE) ---
+                🚨 **このタブだけ語順が言語で変わる。**
+                  ja: 「[末尾] **から** [3] **文字削除する**」
+                  en: 「**Delete** [3] **characters from the** [end]」
+                部品の**順序そのもの**が入れ替わるので、文字列を並べる形では表現できない。
+                `<Trans>` に名前付きスロットを渡し、**並びは locale 側が決める**。
+                ⚠️ `t1` / `t2` は地の文の器（`.field-text`）。地の文をスロットに入れず素の
+                テキストノードにすると、当てる先が無くなって字面が周りとズレる。 */}
             {activeTab === "trim" && (
               <div className="field-row center animate-in fade-in slide-in-from-top-2">
-                <CustomSelect
-                  className="select-fixed"
-                  value={trimPos}
-                  onChange={(v: string) => setTrimPos(v as "start" | "end")}
-                  options={POSITION_OPTIONS}
+                <Trans
+                  i18nKey="trim.sentence"
+                  components={{
+                    pos: (
+                      <CustomSelect
+                        className="select-fixed"
+                        value={trimPos}
+                        onChange={(v: string) => setTrimPos(v as "start" | "end")}
+                        options={positionOptions}
+                      />
+                    ),
+                    count: (
+                      <div className="stepper">
+                        <button className="stepper-btn" onClick={() => setTrimCount(Math.max(0, trimCount - 1))}><ChevronDown size={14} /></button>
+                        <span className="stepper-value">{trimCount}</span>
+                        <button className="stepper-btn" onClick={() => setTrimCount(trimCount + 1)}><ChevronUp size={14} /></button>
+                      </div>
+                    ),
+                    t1: <span className="field-text" />,
+                    t2: <span className="field-text" />,
+                  }}
                 />
-                <span className="field-text">から</span>
-                <div className="stepper">
-                  <button className="stepper-btn" onClick={() => setTrimCount(Math.max(0, trimCount - 1))}><ChevronDown size={14} /></button>
-                  <span className="stepper-value">{trimCount}</span>
-                  <button className="stepper-btn" onClick={() => setTrimCount(trimCount + 1)}><ChevronUp size={14} /></button>
-                </div>
-                <span className="field-text">文字削除する</span>
               </div>
             )}
 
@@ -560,9 +611,9 @@ function App() {
                     value={newExtension}
                     onChange={(e) => setNewExtension(e.target.value)}
                     className="lethe-input compact mono"
-                    placeholder="jpg, png, txt..."
+                    placeholder={t("extension.placeholder")}
                   />
-                  <p className="field-note">ドット不要</p>
+                  <p className="field-note">{t("extension.note")}</p>
                 </div>
               </div>
             )}
@@ -577,8 +628,8 @@ function App() {
               <div className="dropzone-icon">
                 <Archive size={32} />
               </div>
-              <p className="dropzone-title">ファイルをここにドロップ</p>
-              <p className="dropzone-hint">自動的に処理が開始されます</p>
+              <p className="dropzone-title">{t("dropzone.title")}</p>
+              <p className="dropzone-hint">{t("dropzone.hint")}</p>
             </div>
           </div>
         )}
@@ -591,16 +642,28 @@ function App() {
           style={{ cursor: showLogs ? undefined : 'grab' }}
         >
           {/* 📌 右の `.logbar-actions` は設定（歯車）の席。行を button で包まないのは
-              そこにボタンを置けるようにするため（button の入れ子は不正）。 */}
+              そこにボタンを置けるようにするため（button の入れ子は不正）。
+              ⚠️ 歯車を**タイトルバー右**に置かないのは、あそこが OS で姿の変わる土地だから ——
+              Linux は − □ ✕ が居て、macOS は（`decorations: true` なので）そもそも描いていない。
+              ログバーなら全プラットフォームで同じ場所に出せるし、掴み除外幅
+              (`--titlebar-controls`) にも触らずに済む。 */}
           <div className="logbar-header">
             <button className="logbar-toggle" onClick={() => setShowLogs(!showLogs)}>
               <List size={14} />
-              実行ログ
+              {t("logbar.title")}
               <span className={`logbar-chevron ${showLogs ? "up" : ""}`}>
                 <ChevronUp size={14} />
               </span>
             </button>
-            <div className="logbar-actions" />
+            <div className="logbar-actions">
+              <button
+                className="logbar-icon-btn"
+                onClick={() => setShowSettings(true)}
+                title={`${t("settings.open")} (${isMac ? "⌘," : "Ctrl+,"})`}
+              >
+                <Settings size={15} />
+              </button>
+            </div>
           </div>
           <div className="logbar-body">
             <div className="log-list">
@@ -628,13 +691,21 @@ function App() {
               {logs.length === 0 && (
                 <div className="logs-empty">
                   <Archive size={32} style={{ opacity: 0.5 }} />
-                  <span>履歴はありません</span>
+                  <span>{t("logbar.empty")}</span>
                 </div>
               )}
             </div>
           </div>
         </div>
       </div>
+
+      {showSettings && (
+        <SettingsModal
+          theme={theme}
+          onThemeChange={handleThemeChange}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
     </div>
   );
 }

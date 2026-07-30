@@ -732,3 +732,97 @@ body.is-resizing * {
   min-width: 150px;
   flex-shrink: 0;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   設定（モーダル）
+   ═══════════════════════════════════════════════════════════════
+
+   ⚠️ **Kit の `_settings.css` は取り込んでいない。** あちらの `.settings-section` は
+   `var(--layer-1)` を参照しているが、**そのトークンは Kit にも Tabula にも Alethoglyph にも
+   定義が無い**（`_settings.css` 内の 2 箇所で使われるだけの宙ぶらりん）＝ 背景が透明のまま出る。
+   加えて 10.8KB の大半が Lethe Client 固有の語彙（`.nas-card` / `.admin-iframe` 等）で、
+   リネームツールに持ち込む理由が無い。**要る 5 クラスだけ、Kit と同じ名前で自前で持つ**
+   （Kit がいつか正しい設定語彙を配ったとき、そのまま差し替えられる形）。
+
+   `.modal-*` は Kit の `_modal.css` をそのまま使っている（トークンは 4 テーマ全部に在る）。
+   ─────────────────────────────────────────────────────────── */
+
+/* 680px の窓に 90%/max-800px は広すぎる（Kit の既定は Lethe Client の大きい窓向け）。 */
+.settings-modal {
+  width: min(440px, calc(100% - 48px));
+}
+
+/* 🚨 Kit の `.modal-body` は `overflow-y: auto`。`CustomSelect` のリストは container 内の
+   **absolute** なので、**開いたリストが本文の枠で切り落とされる** —— 実機で 4 つ目の
+   テーマ (Cyber) がスクロールしないと押せなかった。ドロップダウンは枠の外に出てよい。
+   ⚠️ この窓の中身が縦に伸びたら（設定項目が増えたら）スクロールが要るので、
+   そのときは切り方を考え直すこと（`overflow: visible` のままだと本文が溢れる）。 */
+.settings-modal .modal-body {
+  overflow: visible;
+}
+
+.settings-section {
+  background: var(--editor-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 8px 20px 12px;
+}
+
+.section-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 12px 0;
+}
+
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 0;
+}
+
+.setting-row + .setting-row {
+  border-top: 1px solid var(--border-color);
+}
+
+.setting-info h4 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.setting-info p {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.setting-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ログバー右の歯車。⚠️ `.titlebar-btn` を流用しない ——
+   あちらは 40×32 の窓ボタン用で、ログバーの 1 行には背が高すぎる。 */
+.logbar-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.logbar-icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}

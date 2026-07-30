@@ -22,6 +22,10 @@
 @import "./ui-kit/components/_reset.css";
 @import "./ui-kit/components/_buttons.css";
 @import "./ui-kit/components/_inputs.css";
+/* ⚠️ Kit の `_settings.css` は**取り込まない**。`.settings-section` が `var(--layer-1)` を
+   参照しているのに、そのトークンは Kit にも Tabula にも Alethoglyph にも**定義が無い**
+   （＝背景が透明のまま出る）。設定パネルに要る 5 クラスは App.css に自前で持つ。 */
+@import "./ui-kit/components/_modal.css";
 
 /* ── このアプリ固有（Kit に無いもの。トークンだけを使う）── */
 @import "./App.css";

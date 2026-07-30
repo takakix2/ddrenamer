@@ -1,0 +1,64 @@
+{
+  "_lang_name": "English",
+  "titlebar": {
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close"
+  },
+  "tabs": {
+    "fixed": "Rename",
+    "add": "Add",
+    "trim": "Delete",
+    "replace": "Replace",
+    "serial": "Numbering",
+    "extension": "Extension"
+  },
+  "position": {
+    "start": "Start (Prefix)",
+    "end": "End (Suffix)"
+  },
+  "fixed": {
+    "keepExt": "Keep extension"
+  },
+  "serial": {
+    "useText": "Add text",
+    "startNumber": "Start number",
+    "resetToOne": "Reset to 1",
+    "digits": "Digits",
+    "dropOriginal": "Drop the original name",
+    "exampleLabel": "Example:"
+  },
+  "replace": {
+    "searchLabel": "Search for",
+    "searchPlaceholder": "Search...",
+    "replaceLabel": "Replace with",
+    "replacePlaceholder": "Replace...",
+    "useRegex": "Use a regular expression"
+  },
+  "trim": {
+    "sentence": "<t1>Delete</t1><count></count><t2>characters from the</t2><pos></pos>"
+  },
+  "extension": {
+    "placeholder": "jpg, png, txt...",
+    "note": "No dot needed"
+  },
+  "dropzone": {
+    "title": "Drop files here",
+    "hint": "Processing starts automatically"
+  },
+  "logbar": {
+    "title": "Execution log",
+    "empty": "No history yet"
+  },
+  "settings": {
+    "open": "Settings",
+    "title": "Settings",
+    "close": "Close",
+    "appearance": "Appearance",
+    "theme": "Theme",
+    "themeDesc": "Colour scheme of the application",
+    "language": "UI language",
+    "languageDesc": "Display language of the interface"
+  }
+}

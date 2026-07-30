@@ -10,7 +10,14 @@ import "@fontsource-variable/noto-sans-jp";
 import "@fontsource-variable/jetbrains-mono";
 
 import "./index.css";
+import "./i18n/config";
+import { applyTheme, getInitialTheme } from "./theme";
 import App from "./App";
+
+// 🚨 **render より前に、React の外で**テーマを当てる。effect の中でやると
+// 1 フレームだけ既定テーマが描かれて瞬く。`index.html` のインライン script は使えない
+// （release では Tauri が nonce を付けるので CSP に弾かれ、しかも console が届かず気づけない）。
+applyTheme(getInitialTheme());
 
 // CSP 違反を目に見えるようにする。WebKitGTK は違反を console に出さないことがあり、
 // 「外に出ようとして黙って止まった」が一番困る形なので、自前で拾って必ず鳴らす。
