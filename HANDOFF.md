@@ -4,8 +4,33 @@
 > `~/dev/agent-guidelines/logs/*-ddrenamer.md` にある。
 
 最終更新: 2026-07-30（blackcube セッション）
-直近の変更: **UI を Tailwind v4 から `Lethe_UI_Kit` へ移行**（Tabula / Alethoglyph とファミリー統一）。
+直近の変更: **UI を Tailwind v4 から `Lethe_UI_Kit` へ移行**（Tabula / Alethoglyph とファミリー統一）＋
+**CSD 窓の窓操作を実装**（掴み・リサイズ・アイコン。どちらも「無かった」もの）。
 その前: macOS の UI 無反応を修正（`1d89a15` まで壊れていた・下記の解決済みセクション）
+
+---
+
+## 🎯 次にやること（このセッションの続き）
+
+**多言語化 (i18n) とテーマ切替。** 2026-07-30 のセッションで**ブロッカーが解けた**ので着手できる。
+
+| 要るもの | 現状 |
+|---|---|
+| デザイン基盤 | ✅ `Lethe_UI_Kit` に載った（Tailwind 撤去済み） |
+| テーマの実体 | ✅ Kit の `themes/_lethe.css` が **`data-theme` で Lethe / Dark / Light / Cyber** の 4 つを持つ |
+| 訳文の実体 | ✅ Kit が **`locales/ja.json` + `en.json`** を配っている（`sync_ui_kit.sh` の同期対象） |
+| 歯車を置く席 | ✅ タイトルバー右（40px の帯）と、ログバーの **`.logbar-actions`（空の div として実在）** |
+| 文言 | ❌ **`App.tsx` にハードコード**。まずここを抜き出す必要がある |
+| 永続化 | ❌ 未設計（選んだテーマ / 言語をどこに保存するか） |
+
+🚨 **`src/App.css` に hex を直接書かないこと。** テーマ切替が半分だけ効く UI になる。
+今は全部 `var(--*)` 経由になっているので、この規律を保てばテーマは**ほぼ配線だけ**で入る。
+
+⚠️ **macOS では `⌘,` のネイティブメニュー項目**も期待される（設定を開く標準の入口）。
+
+📌 **着手前に読むと得なもの**: Kit の `locales/*.json` の粒度（キーの切り方が Lethe 系と揃うか）と、
+Tabula の設定画面（`src/windows/SettingsWindow.tsx`）。**別窓にするか同一窓のモーダルにするか**は
+まだ決めていない —— DDRenamer は 680×638 の小さい窓なので、Tabula と同じ別窓が素直かもしれない。
 
 ---
 
@@ -112,6 +137,32 @@ Tabula の `src/ui-kit -> ../../Lethe_UI_Kit` と同型に揃えた。
 下線テキストタブ（本文切替用）で、こちらは**全幅を埋める 6 モードのセレクタ**
 （「迷わない、広い、速い」の *広い* 部分）。構造は自前で持ち、
 **active を accent の下線で示す作法だけ Kit から借りている**。
+
+### CSD 窓の窓操作は「自前で持つもの」✅（2026-07-30 実装）
+
+`decorations: false` にした時点で、**掴む・リサイズする・閉じるは全部自分の仕事**になる。
+このリポはそれを**持っていなかった**（画面は出ていたので気づかれずに残っていた）。
+
+| 何 | どこ | 🚨 罠 |
+|---|---|---|
+| **窓を動かす** | `App.tsx` の `handleDrag` | **属性 `data-tauri-drag-region` だけでは掴めない。** `pointerdown` から明示的に `startDragging()` を呼ぶ。⚠️ 属性は**イベント target 自身**に必要（バブリングでは届かない）＝ 属性を持たない子要素は**ドラッグを飲み込む** |
+| **リサイズ** | `WindowResizeHandles.tsx` + `App.css` | 8 方向の透明 div が `startResizeDragging(dir)`。辺 **12px** / 角 **20px**（Tabula が 8/16 から広げた値） |
+| **− □ ✕** | `App.tsx` の `.titlebar-btn` | lucide アイコン（`Minus` / `Square` / 最大化中は `Copy` / `X`）。⚠️ 文字グリフに戻さない（OS ごとに顔が変わる・`❐` は無いフォントがある） |
+
+⚠️ **カーソルは native キーワードのみ**（`ew-resize` 等）。`url()` の png は WebKitGTK が
+`GDK_SCALE` でスケールせず HiDPI で極小になる。
+⚠️ **ドラッグ中のカーソルは CSS で制御できない**（native handoff ＝ コンポジタが所有する）。
+`cursor: !important` を書いても無視されるので、書かないこと。
+
+**意図的な妥協 2 つ:**
+- **右上の角そのものからはリサイズできない**（角ハンドルは ✕ の左隣に逃がしてある）。
+  **右辺もタイトルバーの下から始まる** —— 上端まで伸ばすと ✕ の右数 px に板が乗って押せなくなる。
+- **macOS では 8 枚を描いていない**（`decorations: true` ＝ ネイティブの縁が在る）。
+  ⏸ **m4air での実機確認が未了。**
+
+💡 **角のカーソルがホバーとドラッグで跳ねるのはアプリのバグではない** ——
+blackcube の cursor theme が `whiteglass`（古い X11 名のみ）で `nwse-resize` を持たないため。
+`gsettings set org.gnome.desktop.interface cursor-theme 'Adwaita'` で消える（実証済・**未適用**）。
 
 ### パッケージマネージャは bun 一本 ✅
 
@@ -278,15 +329,12 @@ Alacritty / Ghostty を許可しただけでは足りず、実行時に **"tmux"
 
 - 🔶 **macOS 版の焼き直しと配布判断。** UI 無反応は直ったので配れる状態になったが、
   **署名は adhoc のまま**（次項）。`--bundles app` でしか焼いていないので **dmg は未生成**。
-- 🔶 **設定画面の入口と i18n / テーマ。ブロッカーは解けた**（Tailwind 判断が済み、Kit に乗った）。
-  - 帯の右側と、ログバーの `.logbar-actions`（**空の div として実在**）が歯車の席。
-    ✅ **バー全体を `<button>` で包む形は解消済み** —— `.logbar-header` の中の
-    `.logbar-toggle` だけがボタンなので、隣にボタンを置ける（button の入れ子は不正）。
-  - テーマは Kit が `data-theme` で **Lethe / Dark / Light / Cyber** を既に持っている。
-    切替 UI と永続化を足すだけ（`themes/_lethe.css` に 4 つ入っている）。
-  - i18n も Kit が **`locales/ja.json` + `en.json`** を配っている（`sync_ui_kit.sh` の同期対象）。
-    ⚠️ ただし DDRenamer の文言は現在 **`App.tsx` にハードコード**。
-  - macOS では `⌘,` のネイティブメニュー項目も期待される。
+- 🔶 **設定画面 + i18n / テーマ** → **冒頭の「次にやること」に移動**（ブロッカーは解けた）。
+  ✅ **ログバー全体を `<button>` で包む形は解消済み** —— `.logbar-header` の中の
+  `.logbar-toggle` だけがボタンなので、隣に歯車を置ける（button の入れ子は不正）。
+- 🔶 **macOS でリサイズハンドルを描かない判断が未検証。** `decorations: true` ＝ ネイティブの縁が
+  在るので不要という読みだが、`titleBarStyle: Overlay` との兼ね合いは m4air で見ていない。
+  **焼き直しのときに必ず縁を掴んで確かめる**こと。
 - 🔶 **`.custom-select-container` / `-value` / `-icon` の 3 ルールが Kit に無い。**
   Kit は `components/tsx/CustomSelect.tsx` を配っているのに CSS を持たないので、
   **Tabula (`style.css:259`) / Alethoglyph (`App.css:678`) / DDRenamer (`App.css`) が
