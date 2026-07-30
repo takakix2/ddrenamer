@@ -1,140 +1,69 @@
-/* Web フォントは使わない ＝ 起動のたびに外へ出る経路を持たない（完全オフラインで動く）。
-   以前は Google Fonts から Inter を @import していたが、実測すると
-   UI ラベルは全部日本語、数字/拡張子/ファイル名は font-mono、入力欄は weight 500 で、
-   Inter が実際に描いていたのは 400 のごく一部だけだった。同梱する価値が無いので外した。 */
-@import "tailwindcss";
+/* ═══════════════════════════════════════════════════════════════
+   DDRenamer — スタイルの入口
+   Powered by Lethe UI Kit (SSOT)
+   ═══════════════════════════════════════════════════════════════
 
-:root {
-  /* カラーパレット - モダンでフラットなデザイン */
-  --bg-primary: #1a1b1e;
-  --bg-secondary: #25262b;
-  --bg-tertiary: #2c2e33;
-  --bg-hover: #343a40;
+   見た目の正本は `src/ui-kit` = **`Lethe_UI_Kit` への相対 symlink**（`../../Lethe_UI_Kit`）。
+   Tabula / Alethoglyph と同じ実体を指すので、ファミリーの見た目はここを直せば揃って動く。
+   ⚠️ 相対にしてあるのは **blackcube と m4air の両方で解決させるため**
+   （blackcube は `~/dev/Lethe_UI_Kit` 自体が symlink、m4air は実体。相対ならどちらでも同じに効く）。
 
-  --border-default: #373a40;
-  --border-focus: #5f3dc4;
+   ⚠️ **フォントは同梱する**（`main.tsx` が `@fontsource-variable/*` を import）。
+   以前は「Web フォントを使わない ＝ 外へ出る経路を持たない」ために Inter を捨てていたが、
+   Kit のトークン `--font-sans` は `Noto Sans JP Variable` を先頭に置いている。
+   **配っていないフォントを指定するのが一番まずい** —— 指定は当たっているように読めるのに、
+   実際は OS に在る機械だけそれで描かれ、無い機械は別フォントに落ちる ＝ 同じ画面が機械ごとに違う顔になる。
+   同梱はバンドル（`url()` は自分の origin）なので、**完全オフラインで動く保証は変わらない**。
+   ─────────────────────────────────────────────────────────────── */
 
-  --text-primary: #e9ecef;
-  --text-secondary: #adb5bd;
-  --text-tertiary: #868e96;
+/* ── UI Kit（themes → components の順）── */
+@import "./ui-kit/themes/_variables.css";
+@import "./ui-kit/themes/_lethe.css";
+@import "./ui-kit/components/_reset.css";
+@import "./ui-kit/components/_buttons.css";
+@import "./ui-kit/components/_inputs.css";
 
-  --accent-primary: #7950f2;
-  --accent-hover: #9775fa;
-  --accent-active: #5f3dc4;
+/* ── このアプリ固有（Kit に無いもの。トークンだけを使う）── */
+@import "./App.css";
 
-  --success: #51cf66;
-  --error: #ff6b6b;
-  --warning: #ffd43b;
+/* ── アプリ全体の下地 ────────────────────────────────────────── */
 
-  /* スペーシング */
-  --spacing-xs: 0.25rem;
-  --spacing-sm: 0.5rem;
-  --spacing-md: 1rem;
-  --spacing-lg: 1.5rem;
-  --spacing-xl: 2rem;
-
-  /* ボーダーラディウス */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-full: 9999px;
-
-  /* シャドウ */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-
-  /* トランジション */
-  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-
-
+/* Kit の _reset が body の font/bg/color とスクロールバーを持つので、ここは足りない分だけ。 */
 body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
   line-height: 1.5;
 }
 
-/* スクロールバーのスタイリング */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--bg-hover);
-  border-radius: var(--radius-full);
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--border-default);
-}
-
-/* セレクション */
 ::selection {
-  background-color: var(--accent-primary);
-  color: white;
+  background-color: var(--accent-dim);
+  color: var(--text-primary);
 }
 
-/* フォーカスリング - 無効化（個別コンポーネントで制御） */
+/* フォーカスリングは個別に制御する（Kit の入力は focus で border + glow を出す）。 */
 *:focus-visible {
   outline: none;
 }
 
-/* アニメーション定義 */
+/* ── アニメーション ──────────────────────────────────────────
+   ⚠️ `fadeIn` は **Kit の `_cards.css` も参照している**（`.search-result-row`）が、
+   Kit 自身は keyframes を定義していない。取り込む側が持つ約束になっている。
+   ─────────────────────────────────────────────────────────── */
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes slideInFromTop {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes pulse {
-
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.5;
-  }
-}
-
-/* ユーティリティクラス */
-.animate-in {
-  animation: fadeIn var(--transition-base);
-}
-
+.animate-in,
 .fade-in {
-  animation: fadeIn var(--transition-base);
+  animation: fadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .slide-in-from-top-2 {
-  animation: slideInFromTop var(--transition-base);
+  animation: slideInFromTop 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }

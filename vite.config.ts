@@ -1,6 +1,5 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
-import tailwindcss from '@tailwindcss/vite';
 import { readFileSync } from "node:fs";
 
 const host = process.env.TAURI_DEV_HOST;
@@ -54,7 +53,8 @@ function devCspFromTauriConf(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss(), devCspFromTauriConf()],
+  // ⚠️ `devCspFromTauriConf` は **dev に CSP を届ける唯一の経路**。外すと dev だけ CSP 不在になる。
+  plugins: [react(), devCspFromTauriConf()],
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

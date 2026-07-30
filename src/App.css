@@ -1,0 +1,619 @@
+/* ═══════════════════════════════════════════════════════════════
+   DDRenamer — アプリ固有スタイル
+   ═══════════════════════════════════════════════════════════════
+
+   ここには **Lethe_UI_Kit に無いもの**だけを置く。色・半径・フォント・影は
+   **必ず Kit のトークン (`var(--*)`) 経由**で参照する —— hex を直接書くと
+   `data-theme` を切り替えても半分だけ効く UI になる（テーマ機構が壊れる）。
+
+   Kit が持っているものは書かない:
+     入力 → `.lethe-input` / ボタン → `.btn` `.btn-secondary` `.lethe-icon-btn`
+     真偽値 → `.toggle-switch` + `.toggle-slider` / 選択 → `.custom-select-*`
+   ─────────────────────────────────────────────────────────────── */
+
+/* ── シェル ────────────────────────────────────────────────── */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: var(--bg-color);
+  color: var(--text-secondary);
+}
+
+/* 設定エリア → ドロップゾーン → ログバーを縦に積む器。 */
+.app-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── CSD タイトルバー ─────────────────────────────────────────
+   📌 **32px の帯は全プラットフォームで残す。** ドラッグ領域であると同時に、
+   設定ボタン（i18n / テーマの入口）を置ける唯一の共通の土地。
+   macOS では中身だけ出し分ける（ネイティブの信号機がここに座る）。
+   ─────────────────────────────────────────────────────────── */
+.titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  flex-shrink: 0;
+  background: var(--bg-color);
+  border-bottom: 1px solid var(--border-color);
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+}
+
+.titlebar-title {
+  padding-left: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.titlebar-buttons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.titlebar-btn {
+  width: 32px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s;
+}
+
+.titlebar-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.titlebar-btn.close:hover {
+  background: var(--error);
+  color: var(--bg-color);
+}
+
+/* ── モード選択タブ（2 行 × 3 列・全幅）─────────────────────────
+   Kit の `.search-tab` は「本文の切替」用の下線テキストタブで、gap 16px の
+   インラインな並び。こちらは**全幅を埋める 6 モードのセレクタ**（このアプリの主役の
+   入口・「迷わない、広い、速い」の広い部分）なので構造は自前で持つ。
+   ただし **active を accent の下線で示す作法は Kit から借りている**ので、
+   ファミリーとして同じ言葉を喋る。
+   ─────────────────────────────────────────────────────────── */
+.mode-tabs {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  background: var(--bg-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.mode-tabs-row {
+  display: flex;
+  width: 100%;
+}
+
+.mode-tabs-row:first-child {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.mode-tab {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+
+.mode-tab:hover:not(.active) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.mode-tab.active {
+  background: var(--accent-dim);
+  color: var(--accent-color);
+}
+
+.mode-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--accent-color);
+}
+
+/* ── 設定エリア ────────────────────────────────────────────── */
+.config-area {
+  width: 100%;
+  padding: 12px;
+  flex-shrink: 0;
+}
+
+.config-panel {
+  position: relative;
+  width: 100%;
+  padding: 12px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+}
+
+/* ── フォームの部品 ────────────────────────────────────────── */
+.field-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.field-row.center {
+  align-items: center;
+}
+
+.field-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field-grow {
+  flex: 1;
+}
+
+/* Kit の `.form-group` は自前で下余白を持つ。`.field-stack` の gap と二重に効くので、
+   スタックの中に入れたときだけ打ち消す。 */
+.field-stack > .form-group {
+  margin-bottom: 0;
+}
+
+/* 「開始番号」「桁数」のような小見出し。Kit の `.form-group label` より
+   密度が高い（横並びの操作列に載るため）。 */
+.field-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.field-divider {
+  height: 1px;
+  background: var(--border-color);
+}
+
+.field-note {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.field-text {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* 入力欄はこのアプリでは 36px の行に揃える（Kit の既定 padding より詰める）。 */
+.lethe-input.compact {
+  height: 36px;
+  padding: 0 12px;
+}
+
+.lethe-input.mono {
+  font-family: var(--font-mono);
+}
+
+/* トグル + ラベルの並び。Kit の `.toggle-switch` をそのまま使う。 */
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  flex-shrink: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.check-row > span {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.field-fade {
+  transition: opacity 0.2s;
+}
+
+.field-fade.off {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* ── 数値スピナー（Kit に相当物が無い）───────────────────────── */
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+  padding: 0 4px;
+  background: var(--bg-color);
+  border: 1px solid var(--input-border, var(--border-color));
+  border-radius: 6px;
+}
+
+.stepper-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.stepper-btn:hover {
+  color: var(--accent-color);
+  background: var(--bg-hover);
+}
+
+.stepper-value {
+  min-width: 1.75rem;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+/* ── 連番のライブプレビュー ────────────────────────────────── */
+.preview-chip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+.preview-chip-label {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.preview-chip-value {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--accent-color);
+}
+
+/* ── ドロップゾーン（このアプリの主役）─────────────────────── */
+.dropzone-area {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  padding: 12px;
+}
+
+.dropzone {
+  position: absolute;
+  inset: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  transition: border-color 0.2s, background 0.2s, transform 0.2s;
+}
+
+.dropzone-area:hover .dropzone {
+  border-color: var(--accent-color);
+  background: var(--bg-hover);
+}
+
+.dropzone.dragover {
+  border-color: var(--accent-color);
+  background: var(--accent-dim);
+  transform: scale(1.01);
+  box-shadow: var(--glow-shadow);
+}
+
+.dropzone-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  margin-bottom: 12px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  transition: background 0.2s, color 0.2s;
+}
+
+.dropzone-area:hover .dropzone-icon,
+.dropzone.dragover .dropzone-icon {
+  background: var(--accent-dim);
+  color: var(--accent-color);
+}
+
+.dropzone-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  transition: color 0.2s;
+}
+
+.dropzone-area:hover .dropzone-title,
+.dropzone.dragover .dropzone-title {
+  color: var(--text-primary);
+}
+
+.dropzone-hint {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  transition: color 0.2s;
+}
+
+.dropzone-area:hover .dropzone-hint,
+.dropzone.dragover .dropzone-hint {
+  color: var(--accent-color);
+}
+
+/* ── 実行ログ（折り畳み）───────────────────────────────────── */
+.logbar {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  height: 48px;
+  flex-shrink: 0;
+  background: var(--editor-bg, var(--bg-color));
+  border-top: 1px solid var(--border-color);
+}
+
+.logbar.expanded {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
+/* ⚠️ バー全体が 1 つの `<button>` だと、右側に歯車を置けない
+   （ボタンの入れ子は不正）。設定の席を空けておくため、
+   トグルは行の中の 1 要素にしてある。 */
+.logbar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  flex-shrink: 0;
+  padding: 0 16px;
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.logbar-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  padding: 4px 0;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.logbar-toggle:hover {
+  color: var(--text-primary);
+}
+
+.logbar-chevron {
+  display: inline-flex;
+  transition: transform 0.3s;
+}
+
+.logbar-chevron.up {
+  transform: rotate(180deg);
+}
+
+/* 設定ボタン（歯車）の席。今は空。 */
+.logbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logbar-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+}
+
+.log-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.log-row:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-color);
+}
+
+.log-row.error {
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 8%, transparent);
+}
+
+.log-icon {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.log-icon.ok {
+  color: var(--success);
+}
+
+.log-icon.ng {
+  color: var(--error);
+}
+
+.log-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  word-break: break-all;
+}
+
+.log-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* ⚠️ `.log-body` の `word-break: break-all`（長いパスを畳むため）は**時刻まで割る**。
+   実測で `10:0 / 6:41` と 2 行になったので、チップ側で明示的に止める。 */
+.log-time {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  white-space: nowrap;
+  word-break: normal;
+}
+
+.log-path {
+  color: var(--text-secondary);
+}
+
+.log-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 4px;
+}
+
+.log-arrow {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.log-status.ok {
+  color: var(--success);
+  font-weight: 700;
+}
+
+.log-status.ng {
+  color: var(--error);
+}
+
+.logs-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 0;
+  color: var(--text-muted);
+  opacity: 0.6;
+  font-size: 0.75rem;
+}
+
+/* ── CustomSelect の足りない 3 ルール ─────────────────────────
+   🚨 Kit は `components/tsx/CustomSelect.tsx` を配っているのに、
+   `.custom-select-container` / `-value` / `-icon` の CSS を持っていない。
+   そのため **Tabula (`style.css:259`) と Alethoglyph (`App.css:678`) が
+   同じ 3 ルールを各自で書いている** —— ここで 3 つ目の複製になる。
+   本来は Kit の `_inputs.css` に上げるべき（HANDOFF の follow-up に記録）。
+   ─────────────────────────────────────────────────────────── */
+.custom-select-container {
+  position: relative;
+  display: inline-block;
+}
+
+.custom-select-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-select-icon {
+  font-size: 0.6rem;
+  margin-left: 12px;
+  color: var(--text-secondary);
+  transition: transform 0.2s ease;
+}
+
+.custom-select-trigger.open .custom-select-icon {
+  transform: rotate(180deg);
+}
+
+/* 横並びの行に置くときの幅（Kit の trigger は width:100%）。 */
+.select-fixed {
+  min-width: 150px;
+  flex-shrink: 0;
+}
