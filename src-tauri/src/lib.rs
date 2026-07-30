@@ -96,14 +96,26 @@ fn to_hankaku(s: &str) -> String {
         .collect()
 }
 
-/// Reconstruct filename from stem and extension.
-/// If ext is empty, returns just the stem.
-fn join_name_ext(stem: &str, ext: &str) -> String {
-    if ext.is_empty() {
+/// Reconstruct a filename from a stem and an extension.
+///
+/// The one point where a stem and an extension meet.
+///
+/// Every mode that transforms the stem while preserving the extension goes
+/// through here, so this is where an empty stem is refused. The check cannot
+/// live after the join: `Path::new(".jpg").file_stem()` returns `Some(".jpg")`,
+/// so a name that is nothing but an extension does not look empty once built.
+/// Left unguarded it produced a hidden file that the log reported as a success.
+fn join_name_ext(stem: &str, ext: &str) -> Result<String, String> {
+    // Whitespace-only is refused too: "   .jpg" is legal here and illegal on
+    // Windows, and nobody means it.
+    if stem.trim().is_empty() {
+        return Err("Name is empty".into());
+    }
+    Ok(if ext.is_empty() {
         stem.to_string()
     } else {
         format!("{}.{}", stem, ext)
-    }
+    })
 }
 
 // --- Core rename logic ---
@@ -154,7 +166,7 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
         // --- Fixed: replace entire name ---
         RenameCommand::Fixed { name, keep_ext } => {
             if *keep_ext && !ext.is_empty() {
-                Ok(join_name_ext(name, ext))
+                join_name_ext(name, ext)
             } else {
                 Ok(name.clone())
             }
@@ -181,7 +193,7 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
             };
 
             if *keep_ext && !ext.is_empty() {
-                Ok(join_name_ext(&generated, ext))
+                join_name_ext(&generated, ext)
             } else {
                 Ok(generated)
             }
@@ -216,7 +228,7 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
                 Position::Start => format!("{}{}", text, name_stem),
                 Position::End => format!("{}{}", name_stem, text),
             };
-            Ok(join_name_ext(&new_stem, ext))
+            join_name_ext(&new_stem, ext)
         }
 
         // --- Trim: remove characters from stem ---
@@ -248,13 +260,17 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
                 };
             }
 
-            Ok(join_name_ext(&trimmed, ext))
+            join_name_ext(&trimmed, ext)
         }
 
         // --- Extension: change file extension ---
         RenameCommand::Extension { new_ext } => {
             let clean_ext = new_ext.trim_start_matches('.');
-            Ok(format!("{}.{}", name_stem, clean_ext))
+            // Built by hand before, which skipped the guard and also produced a
+            // trailing dot ("photo.") when the new extension was empty. Going
+            // through the join drops the dot instead, and clearing the field now
+            // means "remove the extension".
+            join_name_ext(name_stem, clean_ext)
         }
 
         // --- Case: upper/lower conversion (stem only, preserve extension) ---
@@ -263,7 +279,7 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
                 CaseMode::Upper => name_stem.to_uppercase(),
                 CaseMode::Lower => name_stem.to_lowercase(),
             };
-            Ok(join_name_ext(&new_stem, ext))
+            join_name_ext(&new_stem, ext)
         }
 
         // --- Convert: zenkaku/hankaku conversion (stem only, preserve extension) ---
@@ -272,7 +288,7 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
                 WidthMode::Zenkaku => to_zenkaku(name_stem),
                 WidthMode::Hankaku => to_hankaku(name_stem),
             };
-            Ok(join_name_ext(&new_stem, ext))
+            join_name_ext(&new_stem, ext)
         }
     };
 
@@ -298,13 +314,19 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
                 };
             }
 
-            // Prevent overwriting existing files
+            // Prevent overwriting existing files.
+            //
+            // A case-only rename has to be allowed: on a case-insensitive
+            // filesystem the target "already exists" because it IS the file
+            // being renamed. Deciding that by lowercasing the two names was
+            // wrong -- on a case-sensitive filesystem `photo.txt` and
+            // `PHOTO.txt` are two different files that compare equal that way,
+            // so the guard waved through an `fs::rename` that destroyed the
+            // other one and reported "Success". Ask about identity instead:
+            // dev+ino on Unix, the file index on Windows.
             if new_path.exists() {
-                // To support case-only renames on case-insensitive filesystems,
-                // we should check if the lowercased names match.
-                let old_lower = old_path.to_string_lossy().to_lowercase();
-                let new_lower = new_path.to_string_lossy().to_lowercase();
-                if old_lower != new_lower {
+                let is_self = same_file::is_same_file(old_path, &new_path).unwrap_or(false);
+                if !is_self {
                     return RenameResult {
                         path,
                         status: format!("Target exists: {}", new_name),
@@ -464,5 +486,176 @@ mod tests {
 
         assert_eq!(res.status, "Success");
         assert_eq!(res.new_name.unwrap(), "photo.png");
+    }
+
+    // --- Guards: the two bugs filed on 2026-07-30 ---
+
+    /// A rename that only changes case must not be mistaken for a rename onto
+    /// a distinct file. The old guard compared lowercased names, so on a
+    /// case-sensitive filesystem it let `PHOTO.txt` overwrite an unrelated
+    /// `photo.txt` and reported success.
+    #[test]
+    fn case_only_rename_does_not_destroy_a_distinct_file() {
+        let dir = tempdir().unwrap();
+        let victim = dir.path().join("photo.txt");
+        let subject = dir.path().join("PHOTO.txt");
+        std::fs::write(&victim, b"VICTIM").unwrap();
+        std::fs::write(&subject, b"SUBJECT").unwrap();
+
+        let cmd = RenameCommand::Case { mode: CaseMode::Lower };
+        let res = handle_rename(subject.to_str().unwrap().into(), cmd);
+
+        assert!(
+            res.status.starts_with("Target exists"),
+            "expected a refusal, got {:?}",
+            res.status
+        );
+        assert_eq!(std::fs::read(&victim).unwrap(), b"VICTIM");
+        assert_eq!(std::fs::read(&subject).unwrap(), b"SUBJECT");
+    }
+
+    /// The other direction: when nothing else is in the way, a case-only
+    /// rename still has to go through. On a case-insensitive filesystem the
+    /// target reports as existing because it is the same file.
+    #[test]
+    fn case_only_rename_of_the_same_file_succeeds() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("photo.txt");
+        std::fs::write(&file_path, b"ONLY").unwrap();
+
+        let cmd = RenameCommand::Case { mode: CaseMode::Upper };
+        let res = handle_rename(file_path.to_str().unwrap().into(), cmd);
+
+        assert_eq!(res.status, "Success");
+        assert_eq!(res.new_name.unwrap(), "PHOTO.txt");
+    }
+
+    /// An unrelated existing target is still refused.
+    #[test]
+    fn rename_onto_an_existing_file_is_refused() {
+        let dir = tempdir().unwrap();
+        let occupied = dir.path().join("taken.txt");
+        let subject = dir.path().join("source.txt");
+        std::fs::write(&occupied, b"OCCUPIED").unwrap();
+        std::fs::write(&subject, b"SOURCE").unwrap();
+
+        let cmd = RenameCommand::Fixed {
+            name: "taken".into(),
+            keep_ext: true,
+        };
+        let res = handle_rename(subject.to_str().unwrap().into(), cmd);
+
+        assert!(res.status.starts_with("Target exists"), "got {:?}", res.status);
+        assert_eq!(std::fs::read(&occupied).unwrap(), b"OCCUPIED");
+    }
+
+    /// An empty name with "keep extension" used to build `.jpg` -- a hidden
+    /// file that the final `is_empty()` guard could not see, because the name
+    /// was no longer empty by then.
+    #[test]
+    fn empty_name_with_keep_ext_is_refused() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("photo_a.jpg");
+        File::create(&file_path).unwrap();
+
+        let cmd = RenameCommand::Fixed {
+            name: "".into(),
+            keep_ext: true,
+        };
+        let res = handle_rename(file_path.to_str().unwrap().into(), cmd);
+
+        assert_eq!(res.status, "Name is empty");
+        assert!(file_path.exists(), "the original must be left alone");
+        assert!(!dir.path().join(".jpg").exists(), "a hidden file was created");
+    }
+
+    /// Whitespace is not a name either.
+    #[test]
+    fn whitespace_only_name_is_refused() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("photo_a.jpg");
+        File::create(&file_path).unwrap();
+
+        let cmd = RenameCommand::Fixed {
+            name: "   ".into(),
+            keep_ext: true,
+        };
+        let res = handle_rename(file_path.to_str().unwrap().into(), cmd);
+
+        assert_eq!(res.status, "Name is empty");
+        assert!(file_path.exists());
+    }
+
+    /// The guard lives on the join, so it holds for every stem-preserving mode
+    /// at one place rather than per mode.
+    ///
+    /// Worth recording which modes can actually reach it today: only `Fixed`,
+    /// because it takes the stem straight from the user. `Case` and `Convert`
+    /// preserve length, `Add` builds on a non-empty stem, `Trim` refuses first
+    /// with its own message, and `Serial` cannot produce an empty stem at all --
+    /// `format!("{:0width$}", 0, width = 0)` is "0", never "". The guard is the
+    /// invariant for the seam, not a patch on six live bugs.
+    #[test]
+    fn the_join_refuses_an_empty_stem() {
+        assert_eq!(join_name_ext("", "jpg"), Err("Name is empty".into()));
+        assert_eq!(join_name_ext("   ", "jpg"), Err("Name is empty".into()));
+        assert_eq!(join_name_ext("", ""), Err("Name is empty".into()));
+        assert_eq!(join_name_ext("photo", "jpg"), Ok("photo.jpg".into()));
+        assert_eq!(join_name_ext("photo", ""), Ok("photo".into()));
+    }
+
+    /// Trim keeps its own message: it can say how far over the count was.
+    #[test]
+    fn trim_keeps_its_own_message() {
+        let dir = tempdir().unwrap();
+        let f = dir.path().join("ab.jpg");
+        File::create(&f).unwrap();
+
+        let res = handle_rename(
+            f.to_str().unwrap().into(),
+            RenameCommand::Trim { count: 2, position: Position::End },
+        );
+
+        assert_eq!(res.status, "Trim count (2) exceeds name length (2)");
+        assert!(f.exists());
+    }
+
+    /// Serial is the reason the guard is an invariant and not a fix: it routes
+    /// through the join but always has at least one digit to stand on.
+    #[test]
+    fn serial_always_has_a_digit_so_it_never_hits_the_guard() {
+        let dir = tempdir().unwrap();
+        let g = dir.path().join("photo.jpg");
+        File::create(&g).unwrap();
+
+        let res = handle_rename(
+            g.to_str().unwrap().into(),
+            RenameCommand::Serial {
+                text: "".into(),
+                position: Position::End,
+                number: 0,
+                pad: 0,
+                keep_ext: true,
+                keep_original: false,
+            },
+        );
+
+        assert_eq!(res.status, "Success");
+        assert_eq!(res.new_name.unwrap(), "0.jpg");
+    }
+
+    /// Clearing the extension field now removes the extension instead of
+    /// leaving a trailing dot, which is an illegal name on Windows.
+    #[test]
+    fn clearing_the_extension_drops_the_dot() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("photo.jpg");
+        File::create(&file_path).unwrap();
+
+        let cmd = RenameCommand::Extension { new_ext: "".into() };
+        let res = handle_rename(file_path.to_str().unwrap().into(), cmd);
+
+        assert_eq!(res.status, "Success");
+        assert_eq!(res.new_name.unwrap(), "photo");
     }
 }

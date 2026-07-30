@@ -673,6 +673,7 @@ name = "ddrenamer"
 version = "0.1.0"
 dependencies = [
  "regex",
+ "same-file",
  "serde",
  "serde_json",
  "tauri",
