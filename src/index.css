@@ -5,8 +5,10 @@
 
    見た目の正本は `src/ui-kit` = **`Lethe_UI_Kit` への相対 symlink**（`../../Lethe_UI_Kit`）。
    Tabula / Alethoglyph と同じ実体を指すので、ファミリーの見た目はここを直せば揃って動く。
-   ⚠️ 相対にしてあるのは **blackcube と m4air の両方で解決させるため**
-   （blackcube は `~/dev/Lethe_UI_Kit` 自体が symlink、m4air は実体。相対ならどちらでも同じに効く）。
+   ⚠️ **絶対パスで貼らないこと**（機械ごとにツリーの形が違うと壊れる）。
+   📌 2026-07-30 に Kit は `Lethe_Appliance` の submodule から独立し、**両機とも
+   `~/dev/Lethe_UI_Kit` が実体**になった（以前は blackcube だけ symlink 経由だった）。
+   同日 Alethoglyph の絶対パス symlink も相対に直してある。
 
    ⚠️ **フォントは同梱する**（`main.tsx` が `@fontsource-variable/*` を import）。
    以前は「Web フォントを使わない ＝ 外へ出る経路を持たない」ために Inter を捨てていたが、

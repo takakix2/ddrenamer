@@ -109,12 +109,17 @@ style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'
 ### UI は Lethe_UI_Kit に乗っている ✅（2026-07-30 移行）
 
 **見た目の正本は `src/ui-kit` = `../../Lethe_UI_Kit` への相対 symlink。**
-Tabula / Alethoglyph と**同じ実体**（`~/Lethe_Appliance/Lethe_UI_Kit`）を指す。
+Tabula / Alethoglyph と**同じ実体**（`~/dev/Lethe_UI_Kit`）を指す。
 
-⚠️ **相対にしてある理由**: blackcube では `~/dev/Lethe_UI_Kit` 自体が symlink、
-m4air では実体ディレクトリ。**相対ならどちらの機械でも同じに解決する**
-（Alethoglyph は絶対パスで貼っていて、これは機械を跨ぐと壊れる形）。
-Tabula の `src/ui-kit -> ../../Lethe_UI_Kit` と同型に揃えた。
+📌 **2026-07-30: Kit が `Lethe_Appliance` の submodule から独立した。**
+元々 Lethe のために作ったものなので submodule だったが、今は 5 つが使う共有物
+（Tabula / Alethoglyph / DDRenamer / Lethe Web UI / lethe-client）。
+**両機とも `~/dev/Lethe_UI_Kit` が実体**になった（以前は blackcube だけ symlink 経由・
+m4air は元からこの形でアプライアンス自体を持っていない）。同日 Alethoglyph の
+**絶対パス symlink も相対に直した** —— あれは移設で切れるところだった。
+
+⚠️ **絶対パスで貼らないこと。** 機械ごとにツリーの形が違うと壊れる。しかも
+**切れても Rust は起動する**ので、症状は「無言の白画面」になり原因に辿り着きにくい。
 
 `src/index.css` が取り込むもの:
 `themes/_variables` → `themes/_lethe` → `components/_reset` / `_buttons` / `_inputs`。
