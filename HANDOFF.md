@@ -3,34 +3,22 @@
 > このファイルは**現在の状態**を持つ。経緯（なぜそうなったか）は
 > `~/dev/agent-guidelines/logs/*-ddrenamer.md` にある。
 
-最終更新: 2026-07-30（blackcube セッション）
-直近の変更: **UI を Tailwind v4 から `Lethe_UI_Kit` へ移行**（Tabula / Alethoglyph とファミリー統一）＋
-**CSD 窓の窓操作を実装**（掴み・リサイズ・アイコン。どちらも「無かった」もの）。
+最終更新: 2026-07-30（blackcube セッション・2 回目）
+直近の変更: **i18n (ja/en) とテーマ切替 (4 種) を実装**＋**設定モーダルを新設**。
+その前（同日 1 回目）: **UI を Tailwind v4 から `Lethe_UI_Kit` へ移行**（Tabula / Alethoglyph と
+ファミリー統一）＋**CSD 窓の窓操作を実装**（掴み・リサイズ・アイコン。どちらも「無かった」もの）。
 その前: macOS の UI 無反応を修正（`1d89a15` まで壊れていた・下記の解決済みセクション）
 
 ---
 
-## 🎯 次にやること（このセッションの続き）
+## 🎯 次にやること
 
-**多言語化 (i18n) とテーマ切替。** 2026-07-30 のセッションで**ブロッカーが解けた**ので着手できる。
+**空の名前で隠しファイルが作れるバグ**（下の「未修正」セクション）。**唯一残っている既知の
+正しさの欠陥**で、Rust 側 10 行程度。モードごとに検査がバラけているのが本当の形なので、
+`Fixed` に stem の空検査を足すだけでなく、**番人の置き場所を揃える**ところまでやると良い。
 
-| 要るもの | 現状 |
-|---|---|
-| デザイン基盤 | ✅ `Lethe_UI_Kit` に載った（Tailwind 撤去済み） |
-| テーマの実体 | ✅ Kit の `themes/_lethe.css` が **`data-theme` で Lethe / Dark / Light / Cyber** の 4 つを持つ |
-| 訳文の実体 | ✅ Kit が **`locales/ja.json` + `en.json`** を配っている（`sync_ui_kit.sh` の同期対象） |
-| 歯車を置く席 | ✅ タイトルバー右（40px の帯）と、ログバーの **`.logbar-actions`（空の div として実在）** |
-| 文言 | ❌ **`App.tsx` にハードコード**。まずここを抜き出す必要がある |
-| 永続化 | ❌ 未設計（選んだテーマ / 言語をどこに保存するか） |
-
-🚨 **`src/App.css` に hex を直接書かないこと。** テーマ切替が半分だけ効く UI になる。
-今は全部 `var(--*)` 経由になっているので、この規律を保てばテーマは**ほぼ配線だけ**で入る。
-
-⚠️ **macOS では `⌘,` のネイティブメニュー項目**も期待される（設定を開く標準の入口）。
-
-📌 **着手前に読むと得なもの**: Kit の `locales/*.json` の粒度（キーの切り方が Lethe 系と揃うか）と、
-Tabula の設定画面（`src/windows/SettingsWindow.tsx`）。**別窓にするか同一窓のモーダルにするか**は
-まだ決めていない —— DDRenamer は 680×638 の小さい窓なので、Tabula と同じ別窓が素直かもしれない。
+そのあと配布に向けるなら **macOS 版の焼き直し**（m4air）。⚠️ **今 m4air に在る成果物は
+`1d89a15` ＝ UI 移行も i18n も入っていない**ので、配る前に必ず焼き直すこと。
 
 ---
 
@@ -43,7 +31,9 @@ PC 破壊で失われた前作（soft.NU の DDRenamer）の再構築。
   - ⚠️ **Tailwind v4 は 2026-07-30 に撤去済み**（`~/dev/CLAUDE.md` の「Tailwind 放棄済」に合流）
 - Backend: **Rust**（`std::fs` / `PathBuf` / `regex`）— `src-tauri/src/lib.rs`
 - dev ポート: **1425**（`strictPort: true`・`~/dev/CLAUDE.md` のポート登録簿どおり）
-- remote: `origin` = Gitea / `github` = `takakix2/DDRenamer` の**2 本**
+- remote: `origin` = Gitea (`takaki2/DDRenamer`) / `github` = **`takakix2/ddrenamer`**（小文字）の**2 本**
+  - ⚠️ GitHub 側は途中で `DDRenamer` → `ddrenamer` に**改名されていた**。push はリダイレクトで
+    通ってしまうので気づきにくい（`git remote set-url` 済み・2026-07-30 に記載も修正）
 
 ---
 
@@ -137,6 +127,59 @@ Tabula の `src/ui-kit -> ../../Lethe_UI_Kit` と同型に揃えた。
 下線テキストタブ（本文切替用）で、こちらは**全幅を埋める 6 モードのセレクタ**
 （「迷わない、広い、速い」の *広い* 部分）。構造は自前で持ち、
 **active を accent の下線で示す作法だけ Kit から借りている**。
+
+### i18n とテーマは入っている ✅（2026-07-30 実装・実機確認済み）
+
+**`i18next` + `react-i18next`**（Tabula / Alethoglyph と同じ組）。設定は**同一窓のモーダル**。
+
+| 何 | どこ |
+|---|---|
+| 言語（同梱 ja/en のみ） | `src/i18n/config.ts` + `src/i18n/locales/{ja,en}.json` |
+| テーマ（lethe / dark / light / cyber） | `src/theme.ts` — 実体は Kit の `_lethe.css`、こちらは `data-theme` を書くだけ |
+| 設定 UI | `src/SettingsModal.tsx`（歯車は **`.logbar-actions`**・`⌘,` / `Ctrl+,` でも開く） |
+| 永続化 | `localStorage`: `ddrenamer-ui-language` / `ddrenamer-theme` |
+| 破れの検出 | `bun run check:locales`（キー欠落と `<Trans>` スロット不一致を見る） |
+
+**❌ 「訳文は Kit が配っている」は誤りだった。** Kit の `locales/*.json` は **Lethe Client の
+アプリ文言**（NAS 接続・RAG・チャット）で、流用できたのは `settings.theme` 級の数語だけ。
+訳文は自前で持つ。補間は **i18next 既定の `{{name}}`** に統一した（Kit 内部は `{n}` と
+`{{count}}` に割れていて、規約として借りられない）。
+
+🚨 **`POSITION_OPTIONS` をモジュール定数に戻さないこと。** `t()` は言語で変わるので、
+定数のまま持つと**言語を切り替えてもあの 3 つのセレクタだけ古い言語で残る**
+（他が全部切り替わるので「たまたま訳し漏れ」に見えて原因に辿り着けない）。`useMemo` で持つ。
+
+🚨 **削除タブの一文だけは `<Trans>`。** 語順が言語で入れ替わるため（ja「[末尾] **から** [3]
+**文字削除する**」/ en「**Delete** [3] **characters from the** [end]」）、部品の並びを
+**locale 側**が決める。スロットは `<pos>` / `<count>` / `<t1>` / `<t2>`。
+⚠️ **地の文もスロット (`t1`/`t2`) に入れる** —— 素のテキストノードにすると `.field-text` を
+当てる先が無くなって字面が周りとズレる。
+💡 空タグ (`<count></count>`) でも**元の children は保たれる**（スピナーの中身は消えない・実機確認）。
+
+📌 **ログバーは英語のレーン。** 実行ログの status は Rust (`lib.rs`) が返す機械の値なので
+**翻訳しない**（`res.status === "Success"` で分岐にも使っている）。
+2026-07-30 に `lib.rs:199` の `"検索文字列が空です"` だけ日本語で取り残されていたのを
+`"Search string is empty"` に揃えた。**時刻だけはロケールに従う**
+（`toLocaleTimeString(i18n.language)` ＝ ja `15:05:25` / en `3:04:49 PM`。実機で両方確認）。
+
+⚠️ **時刻の言語は hook ではなく singleton (`i18nInstance`) から読む。** `processFiles` は
+deps `[]` の effect に捕まる関数（設定を `configRef` で渡しているのはそのため）なので、
+hook 由来の値を入れると「第 1 レンダーの値を握った関数」になる。実体は同じインスタンスで
+結果も正しいが、**読んだ人には分からないし lint も鳴る**。
+
+### 🚨 Kit の `_settings.css` は取り込んでいない（未定義トークンを参照している）
+
+Kit の `.settings-section` は `background: var(--layer-1)` を使うが、**`--layer-1` は Kit にも
+Tabula にも Alethoglyph にも定義が無い**（`_settings.css` 内の 2 箇所で使われるだけの宙ぶらりん）。
+取り込むと**背景が透明のまま**出る。要る 5 クラス（`.settings-section` / `.section-title` /
+`.setting-row` / `.setting-info` / `.setting-control`）は **Kit と同じ名前で `App.css` に自前で持つ**。
+`.modal-*` の方は健全なので `_modal.css` はそのまま使っている。
+
+🚨 **`_modal.css` の `.modal-body` は `overflow-y: auto`。** `CustomSelect` のリストは
+container 内の absolute なので、**開いたリストが本文の枠で切られる** —— 実機で 4 つ目の
+テーマ (Cyber) がスクロールしないと押せなかった。`.settings-modal .modal-body` を
+`overflow: visible` にして解決。⚠️ **設定項目が増えて縦に伸びたら破綻する**（本文が溢れる）ので、
+そのときは切り方を考え直すこと。
 
 ### CSD 窓の窓操作は「自前で持つもの」✅（2026-07-30 実装）
 
@@ -329,9 +372,17 @@ Alacritty / Ghostty を許可しただけでは足りず、実行時に **"tmux"
 
 - 🔶 **macOS 版の焼き直しと配布判断。** UI 無反応は直ったので配れる状態になったが、
   **署名は adhoc のまま**（次項）。`--bundles app` でしか焼いていないので **dmg は未生成**。
-- 🔶 **設定画面 + i18n / テーマ** → **冒頭の「次にやること」に移動**（ブロッカーは解けた）。
-  ✅ **ログバー全体を `<button>` で包む形は解消済み** —— `.logbar-header` の中の
-  `.logbar-toggle` だけがボタンなので、隣に歯車を置ける（button の入れ子は不正）。
+  ⚠️ **Linux の release も i18n 移行後は焼いていない**（最後の焼きは 2026-07-30 のフォント同梱時）。
+- 🔶 **macOS のネイティブメニューに「設定… ⌘,」の項目が無い。** キーボードショートカットは
+  実装したが、macOS で標準の入口である**メニュー項目**は Rust 側の menu 構築が要るので未着手。
+- 🔶 **Kit の `--layer-1` が宙ぶらりん**（`_settings.css` が参照するのに定義が無い）。
+  DDRenamer は `_settings.css` を避けて回避したが、**Lethe Client 側は透明な背景で出ているはず**。
+  Kit に 4 テーマ分の定義を足すのが筋だが、横断変更（lethe-client / Tabula / Alethoglyph）なので
+  今回はやっていない。`.custom-select-container` の 3 重複と**同じ性質の借金**。
+- 🔶 **連番タブでは `Ctrl+V` がリネームを起こさない。** タブを開くとプレフィックス入力が
+  **自動フォーカス**され、`Ctrl+V` は「入力欄にフォーカスがあれば素通し」の早期 return に当たる。
+  設計としては正しい（欄に貼れないと困る）が、**このタブだけ貼ってもリネームされない**のは
+  説明が要る挙動。D&D は影響を受けない。今回の変更で入ったものではない。
 - 🔶 **macOS でリサイズハンドルを描かない判断が未検証。** `decorations: true` ＝ ネイティブの縁が
   在るので不要という読みだが、`titleBarStyle: Overlay` との兼ね合いは m4air で見ていない。
   **焼き直しのときに必ず縁を掴んで確かめる**こと。
@@ -362,6 +413,22 @@ import -window "$WID" shot.png
 # 完全オフラインで起動する
 unshare -rn bash -c 'ip link set lo up; exec env GDK_BACKEND=x11 ./src-tauri/target/release/ddrenamer'
 ```
+
+### 🚨 `xdotool` で打つときは `--window` を付けてはいけない（2026-07-30 に確立）
+
+`xdotool key --window <id> ctrl+comma` は **XSendEvent**（合成イベント）で送るが、
+**GTK は `send_event=true` のイベントを既定で捨てる** —— エラーも出ず、**何も起きない**。
+`--window` を外すと **XTEST**（本物の入力）になり、そのまま効く。
+
+```bash
+xdotool windowactivate --sync "$WID"; sleep 0.5
+xdotool key ctrl+comma            # ← --window を付けない
+xdotool mousemove $((X+438)) $((Y+347)) click 1   # 座標は getwindowgeometry --shell の X,Y 基準
+```
+
+⚠️ **起動直後の 1 枚は信用しない。** 窓が map された直後に撮ると **レイアウト確定前のフレーム**が
+写る（実際、ドロップゾーンが消えてログ本文が溢れた絵が撮れて、状態のバグかと追いかけた）。
+数秒待つか、**同じ絵が 2 回撮れること**を確かめてから読むこと。
 
 ⚠️ **CSP のカナリアだけはネット有りで撃つこと。** オフラインだと「CSP がブロックした」と
 「そもそも繋がらない」が同じ絵になり、何も証明できない。
