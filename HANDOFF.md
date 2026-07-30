@@ -3,8 +3,9 @@
 > このファイルは**現在の状態**を持つ。経緯（なぜそうなったか）は
 > `~/dev/agent-guidelines/logs/*-ddrenamer.md` にある。
 
-最終更新: 2026-07-29（m4air セッション）
-直近の変更: macOS の UI 無反応を修正（`1d89a15` まで壊れていた・下記の解決済みセクション）
+最終更新: 2026-07-30（blackcube セッション）
+直近の変更: **UI を Tailwind v4 から `Lethe_UI_Kit` へ移行**（Tabula / Alethoglyph とファミリー統一）。
+その前: macOS の UI 無反応を修正（`1d89a15` まで壊れていた・下記の解決済みセクション）
 
 ---
 
@@ -13,7 +14,8 @@
 PC 破壊で失われた前作（soft.NU の DDRenamer）の再構築。
 **「迷わない、広い、速い」** — タブで機能を選び、巨大なドロップゾーンに投げ込むだけでリネームが終わる。
 
-- Frontend: **Tauri v2 + React 19 + Tailwind CSS v4** + lucide-react
+- Frontend: **Tauri v2 + React 19 + Lethe_UI_Kit**（CSS 共有デザインシステム）+ lucide-react
+  - ⚠️ **Tailwind v4 は 2026-07-30 に撤去済み**（`~/dev/CLAUDE.md` の「Tailwind 放棄済」に合流）
 - Backend: **Rust**（`std::fs` / `PathBuf` / `regex`）— `src-tauri/src/lib.rs`
 - dev ポート: **1425**（`strictPort: true`・`~/dev/CLAUDE.md` のポート登録簿どおり）
 - remote: `origin` = Gitea / `github` = `takakix2/DDRenamer` の**2 本**
@@ -22,19 +24,40 @@ PC 破壊で失われた前作（soft.NU の DDRenamer）の再構築。
 
 ## 現在の状態（2026-07-29 時点で実測済み）
 
-### 完全オフラインで動く ✅
+### 完全オフラインで動く ✅（フォント同梱後も維持・2026-07-30 再実測）
 
-**配布物に外部を呼ぶ URL は 1 件も無い。** release バイナリを `grep -a` して確認済み。
+**配布物に外部を呼ぶ URL は 1 件も無い。** release バイナリの `strings` に残るのは
+dbus 仕様の URL・tauri の panic メッセージ内の GitHub リンク・Adobe XMP 名前空間・
+`http://ipc.localhost`（CSP の値そのもの）だけで、**CDN もフォントホストも無い**。
 netns を分離（`unshare -rn`）して起動しても、ネット有りと**1 ピクセルも変わらない絵**が出る
-（ウィンドウ単体キャプチャで比較・バイト一致）。
+（ウィンドウ単体キャプチャで **sha256 一致**）。
 
-- **Web フォントは使わない。** 以前は Google Fonts から Inter を `@import` していた。
-  Vite は外部 URL の `@import` をバンドルしないので、**住所が dist の CSS に焼かれていた**。
-- 同梱（`@fontsource`）に切り替えるのではなく、**フォントごと捨てた**。実測すると
-  UI ラベルは全部日本語 / 数字・拡張子・ファイル名は `font-mono` / 入力欄は weight 500 で、
-  **Inter が実際に取得されたのは weight 400 だけ**だった。221KB を払う価値が無い。
-- `body` は `system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`。
-  ⚠️ **OS ごとに顔が変わる**（Linux: Ubuntu Sans / mac: SF Pro / Win: Segoe UI）。承知のうえ。
+- **フォントは同梱している**（`main.tsx` が `@fontsource-variable/noto-sans-jp` と
+  `@fontsource-variable/jetbrains-mono` を import）。**方針転換の経緯**:
+  - 元は Google Fonts の Inter を `@import` していた（住所が dist の CSS に焼かれていた）。
+  - 一度は**フォントごと捨てた** —— Inter が実際に描いていたのは weight 400 だけで、
+    221KB を払う価値が無いと実測したため。
+  - **2026-07-30 に同梱へ戻した。** `Lethe_UI_Kit` に移行してトークン `--font-sans` が
+    `Noto Sans JP Variable` を先頭に置く形になったから。🚨 **配っていないフォントを
+    指定するのが一番まずい** —— OS に同名フォントが在る機械だけ当たり、無い機械は別フォントに
+    落ちる ＝ **同じ画面が機械ごとに違う字で出て、しかも指定は書いてあるので気づけない**
+    （Kit 自身のコメントがこれを警告している）。Tabula / Alethoglyph と同じ字面に揃える判断。
+- **同梱はオフライン保証を壊さない**（`url()` は自分の origin）。`unicode-range` 分割は
+  保たれていて **130 チャンク** —— Google Fonts と同じ「必要な文字の chunk だけ読む」挙動でローカル。
+- **代償はサイズ**: deb 5.2M → **11M** / AppImage 78M → **83M**（CJK フォントの分）。
+  ⚠️ 文字範囲を自分で絞ってはいけない（欠けても豆腐にならず別フォントに落ちるだけなので、
+  「なんとなく字が違う」で終わる）。
+
+### 🚨 `assetsInlineLimit: 0` は load-bearing（外すとフォントが CSP で弾かれる）
+
+`vite.config.ts` の `build.assetsInlineLimit: 0` は**飾りではない**。
+既定（4096 バイト未満をインライン化）だと、130 個のフォントチャンクのうち**小さい 2 個が
+`data:` URI に化け**、`font-src` 指令を持たない CSP が `default-src 'self'` に落ちて
+**実際にブロックしていた**（DOM カナリアで `[CSP-HIT] font-src -> data` を 2 回観測）。
+
+⚠️ **ブロックされても画面は出る。** その文字範囲だけ別フォントに落ちるので、
+症状は「なんとなく字が違う」。**CSP を緩める（`font-src 'self' data:`）方は採らなかった** ——
+全部ファイルなら `'self'` だけで足り、custom protocol 越しのローカル取得なので代償が無い。
 
 ### CSP が効いている ✅
 
@@ -52,8 +75,43 @@ style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'
   CSP 仕様上 nonce があると `'unsafe-inline'` は無視されるので、**dev と release で実効 CSP が違う**。
   本番 CSS は外部ファイル、React の `style={{}}` は CSSOM 経由で CSP 対象外 —— この 2 つのおかげで
   無傷だった（**release ビルドを起動して目視確認済み**）。
-- CSP 違反は `src/main.tsx` で `securitypolicyviolation` を拾って必ず console に出す
+- CSP 違反は `src/main.tsx` で `securitypolicyviolation` を拾って console に出す
   （WebKitGTK は違反を黙って捨てることがあるため）。
+- 🚨 **ただし release ではその console が端末に届かない**（2026-07-30 実測）。
+  release バイナリをシェルから起動しても stdout/stderr に**1 行も出ない** ——
+  `console.error("...")` を仕込んだカナリアでも空だった。
+  ⇒ **「release を起動して stderr が空 ＝ CSP 違反なし」とは言えない。**
+  release で確かめるときは**違反を DOM に書き出す一時カナリア**を仕込んで
+  スクリーンショットで読む（この方法で上記の `font-src -> data` を捕まえた）。
+
+### UI は Lethe_UI_Kit に乗っている ✅（2026-07-30 移行）
+
+**見た目の正本は `src/ui-kit` = `../../Lethe_UI_Kit` への相対 symlink。**
+Tabula / Alethoglyph と**同じ実体**（`~/Lethe_Appliance/Lethe_UI_Kit`）を指す。
+
+⚠️ **相対にしてある理由**: blackcube では `~/dev/Lethe_UI_Kit` 自体が symlink、
+m4air では実体ディレクトリ。**相対ならどちらの機械でも同じに解決する**
+（Alethoglyph は絶対パスで貼っていて、これは機械を跨ぐと壊れる形）。
+Tabula の `src/ui-kit -> ../../Lethe_UI_Kit` と同型に揃えた。
+
+`src/index.css` が取り込むもの:
+`themes/_variables` → `themes/_lethe` → `components/_reset` / `_buttons` / `_inputs`。
+
+| 何 | どこが持つ |
+|---|---|
+| 入力欄 | Kit `.lethe-input`（`+ .compact` で 36px 行に詰める） |
+| ボタン | Kit `.btn` / `.btn-secondary` / `.lethe-icon-btn` |
+| 真偽値 | Kit `.toggle-switch` + `.toggle-slider`（**チェックボックスから変更**。Kit に checkbox の作法が無く、トグルが Kit の真偽値の言葉だから） |
+| 選択メニュー | Kit `components/tsx/CustomSelect`（自前の `DropdownSelect` 41 行を畳んだ） |
+| モード選択タブ / ドロップゾーン / CSD 帯 / ログバー / 数値スピナー | **`src/App.css`（アプリ固有）** |
+
+🚨 **`src/App.css` に hex を直接書かないこと。** 必ず `var(--*)` 経由。
+直書きすると `data-theme` を切り替えても半分だけ効く UI になる（Kit は Lethe / Dark / Light / Cyber を持つ）。
+
+⚠️ **モード選択タブは Kit の `.search-tab` を使っていない。** あちらは gap 16px で並ぶ
+下線テキストタブ（本文切替用）で、こちらは**全幅を埋める 6 モードのセレクタ**
+（「迷わない、広い、速い」の *広い* 部分）。構造は自前で持ち、
+**active を accent の下線で示す作法だけ Kit から借りている**。
 
 ### パッケージマネージャは bun 一本 ✅
 
@@ -67,8 +125,10 @@ style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'
 
 | プラットフォーム | 焼いた場所 | 成果物 |
 |---|---|---|
-| Linux x86_64 | blackcube | `deb 5.2M` / `rpm 5.2M` / `AppImage 78M` |
-| macOS aarch64 | **m4air** | `DDRenamer.app 13M` / `DDRenamer_0.1.0_aarch64.dmg 5.5M` |
+| Linux x86_64 | blackcube | **2026-07-30 に焼き直し**: `deb 11M` / `rpm 11M` / `AppImage 83M`（フォント同梱で倍増） |
+| macOS aarch64 | **m4air** | `DDRenamer.app 13M` / `DDRenamer_0.1.0_aarch64.dmg 5.5M` ⚠️ **UI 移行前 (`1d89a15`) の物**|
+
+⚠️ **macOS 版は UI 移行を含んでいない。** 焼き直しが要る（下の follow-up）。
 
 - ⚠️ **macOS 版の署名は adhoc**（`TeamIdentifier=not set`）。自分の Mac なら動くが、
   配ると Gatekeeper が「開発元を確認できません」と言う。Developer ID + notarize は未着手。
@@ -188,6 +248,25 @@ Alacritty / Ghostty を許可しただけでは足りず、実行時に **"tmux"
 
 ---
 
+## 🐛 未修正: 空の名前 + 拡張子維持 で **隠しファイルが作れる**（2026-07-30 発見）
+
+**再現**: 「リネーム」タブで名前を**空のまま**ファイルを投入すると、
+`photo_a.jpg` → **`.jpg`** に成功する（実機で確認）。README は「空名バリデーション搭載」と
+謳っているが、通っている。
+
+**機構**: `src-tauri/src/lib.rs`
+- `RenameCommand::Fixed` は `keep_ext && !ext.is_empty()` なら `join_name_ext(name, ext)` を返す
+  → `name` が空でも **`".jpg"`** という「空でない名前」になる（`lib.rs:156`）。
+- 最後の番人 `if new_name.is_empty()`（`lib.rs:282`）は**完成した名前**しか見ないので、
+  `".jpg"` は空ではない ＝ 素通りする。
+
+⇒ **stem が空かどうかを見ていない**のが穴。`Trim` 側には
+`Resulting name is empty after trim`（`lib.rs:243`）という別の番人が居るので、
+**モードごとに検査がバラけている**のが本当の形。
+
+📌 UI 移行の実験（エラー行の CSS を確かめるために空名で撃った）で偶然踏んだもので、
+**今回の変更が作ったバグではない**。Rust 側の挙動変更になるので移行スコープ外にした。
+
 ## Pending（要件定義書 §4 より）
 
 - [ ] **名前の交換 (Swap)** — 2 ファイル名の入れ替え（一時ファイル経由の 3 段階リネーム）
@@ -199,15 +278,23 @@ Alacritty / Ghostty を許可しただけでは足りず、実行時に **"tmux"
 
 - 🔶 **macOS 版の焼き直しと配布判断。** UI 無反応は直ったので配れる状態になったが、
   **署名は adhoc のまま**（次項）。`--bundles app` でしか焼いていないので **dmg は未生成**。
-- 🔶 **設定画面の入口と i18n / テーマ。** 帯の右側を席として空けてある。
-  フッターのログバーにも `justify-between` の**空の右スロットが既にある**（`App.tsx`）が、
-  ⚠️ バー全体が `<button>` なので歯車を入れるなら div + 個別ボタンへの組み替えが要る。
-  macOS では `⌘,` のネイティブメニュー項目も期待される。
-  🚨 **着手前に下の Tailwind / Lethe_UI_Kit の判断を先に済ませること** ——
-  テーマ機構は UI 基盤に最も強く依存するので、Tailwind の上に作ると移行時に作り直しになる。
+- 🔶 **設定画面の入口と i18n / テーマ。ブロッカーは解けた**（Tailwind 判断が済み、Kit に乗った）。
+  - 帯の右側と、ログバーの `.logbar-actions`（**空の div として実在**）が歯車の席。
+    ✅ **バー全体を `<button>` で包む形は解消済み** —— `.logbar-header` の中の
+    `.logbar-toggle` だけがボタンなので、隣にボタンを置ける（button の入れ子は不正）。
+  - テーマは Kit が `data-theme` で **Lethe / Dark / Light / Cyber** を既に持っている。
+    切替 UI と永続化を足すだけ（`themes/_lethe.css` に 4 つ入っている）。
+  - i18n も Kit が **`locales/ja.json` + `en.json`** を配っている（`sync_ui_kit.sh` の同期対象）。
+    ⚠️ ただし DDRenamer の文言は現在 **`App.tsx` にハードコード**。
+  - macOS では `⌘,` のネイティブメニュー項目も期待される。
+- 🔶 **`.custom-select-container` / `-value` / `-icon` の 3 ルールが Kit に無い。**
+  Kit は `components/tsx/CustomSelect.tsx` を配っているのに CSS を持たないので、
+  **Tabula (`style.css:259`) / Alethoglyph (`App.css:678`) / DDRenamer (`App.css`) が
+  同じものを 3 箇所で書いている**。Kit の `_inputs.css` に上げるべきだが、
+  横断変更（lethe-client / Lethe Web UI も巻き込む）なので今回はやっていない。
 - ⏸ **署名 / notarize の方針**（現状 adhoc）。配る段になったら Developer ID が要る。
-- ⏸ **Tailwind v4 を使っている。** `~/dev/CLAUDE.md` は「Tailwind は放棄済・新規 UI は
-  `Lethe_UI_Kit` に揃える」なので、移行するか塩漬けにするかの判断が要る（**判断していない**）。
+- ⏸ **フォント同梱でバンドルが倍になった**（deb 5.2M → 11M）。絞るなら subset だが、
+  欠けた文字が豆腐にならず別フォントに落ちるので**壊れても気づけない**。今は絞らない判断。
 - ⏸ **`bun run tauri dev` の起動確認は XWayland 経由でしかしていない**
   （`GDK_BACKEND=x11` + `xdotool` + `import -window`）。Wayland ネイティブでの目視は人の手が要る。
 
@@ -230,6 +317,32 @@ unshare -rn bash -c 'ip link set lo up; exec env GDK_BACKEND=x11 ./src-tauri/tar
 
 ⚠️ **CSP のカナリアだけはネット有りで撃つこと。** オフラインだと「CSP がブロックした」と
 「そもそも繋がらない」が同じ絵になり、何も証明できない。
+
+### release の中を覗く型 — **DOM カナリア**（2026-07-30 に確立）
+
+release は console が端末に届かない（上記）。**測りたい値を画面に描いてスクリーンショットで読む。**
+
+```tsx
+// main.tsx に一時的に。検証後に必ず削除する。
+const c = document.createElement("div");
+c.style.cssText = "position:fixed;inset:0;z-index:99999;background:#000;color:#0f0;font:11px monospace";
+document.addEventListener("DOMContentLoaded", () => document.body.appendChild(c));
+const say = (s: string) => { c.textContent += s + "\n"; };
+
+say("[1] この行が出ている = 検出器は生きている");          // ← 陽性対照を必ず 1 行目に
+window.addEventListener("securitypolicyviolation", (e) => say(`[CSP-HIT] ${e.violatedDirective} -> ${e.blockedURI}`));
+fetch("https://example.com/canary").catch(() => {});      // ← 必ずブロックされる撃ち込み
+```
+
+💡 **1 行目と「必ず失敗する撃ち込み」を必ず入れる。** これが無いと
+「CSP-HIT が出ていない ＝ 違反が無い」と「検出器が黙っている」を区別できない。
+実際、最初は `console.error` 版で撃って**全部空**だったので、危うく「違反なし」と読むところだった。
+
+⚠️ **フォントの `document.fonts.check(font)` は既定のテスト文字が空白**なので、
+`unicode-range` 分割だと空白の chunk が未ロードで **`false` を返す（測り方の artifact）**。
+実文字を渡す（`check('24px "Noto Sans JP Variable"', "ファイル")`）。
+⚠️ **幅比較で CJK は判定できない** —— 全角はどのフォントでも 1em 幅なので、
+実在しない family と**同じ幅になる**（実測 288.0 vs 288.0）。Latin なら差が出る（140 vs 130）。
 
 ### macOS 側（m4air・2026-07-29 に確立）
 
