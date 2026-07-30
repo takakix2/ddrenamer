@@ -31,17 +31,6 @@ const HANDLES: ResizeDirection[] = [
 // direction → CSS クラスの語尾（NorthWest → north-west）
 const slug = (d: ResizeDirection) => d.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
 
-const cursorClass = (d: ResizeDirection) => {
-  if (d === "East" || d === "West") return "is-resizing-ew";
-  if (d === "North" || d === "South") return "is-resizing-ns";
-  if (d === "NorthWest" || d === "SouthEast") return "is-resizing-nwse";
-  return "is-resizing-nesw";
-};
-
-const ALL_CURSOR_CLASSES = [
-  "is-resizing", "is-resizing-ew", "is-resizing-ns", "is-resizing-nwse", "is-resizing-nesw",
-];
-
 export default function WindowResizeHandles() {
   const startResize =
     (direction: ResizeDirection) => async (e: React.PointerEvent<HTMLDivElement>) => {
@@ -49,15 +38,16 @@ export default function WindowResizeHandles() {
       e.preventDefault();
       e.stopPropagation();
 
-      // ドラッグ中はポインタが縁から外れてもカーソルを保つ（body 全体に被せる）。
-      document.body.classList.add("is-resizing", cursorClass(direction));
+      // ドラッグ中の文字選択を止める。⚠️ **カーソルはここでは制御できない**
+      // （native handoff 中はコンポジタが所有する）。App.css の注記を参照。
+      document.body.classList.add("is-resizing");
       try {
         await getCurrentWindow().startResizeDragging(direction);
       } catch (err) {
         // ⚠️ release ではこの console は端末に届かない（main.tsx の注記を参照）。
         console.error("startResizeDragging failed:", err);
       } finally {
-        document.body.classList.remove(...ALL_CURSOR_CLASSES);
+        document.body.classList.remove("is-resizing");
       }
     };
 

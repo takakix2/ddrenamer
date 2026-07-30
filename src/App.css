@@ -17,10 +17,13 @@
    GDK_SCALE でスケールせず、HiDPI で極小になる。
    ─────────────────────────────────────────────────────────── */
 :root {
-  --resize-edge: 8px;    /* 辺の掴み幅 */
-  --resize-corner: 18px; /* 角の一辺 */
+  /* 掴み幅は **Tabula が 8→12 / 16→20 に広げた後の値**に合わせている。
+     あちらは実使用で 8px では足りないと判断して拡大しており、同じ結論を二度出す必要は無い。 */
+  --resize-edge: 12px;   /* 辺の掴み幅 */
+  --resize-corner: 20px; /* 角の一辺 */
   /* タイトルバー右の − □ ✕（40px × 3）。ここに掴みを重ねるとボタンが死ぬので避ける。 */
   --titlebar-controls: 120px;
+  --titlebar-height: 40px;
 }
 
 .resize-handles {
@@ -61,13 +64,23 @@
 .resize-handle--west,
 .resize-handle--east {
   width: var(--resize-edge);
-  top: var(--resize-corner);
   bottom: var(--resize-corner);
   cursor: ew-resize;
 }
 
-.resize-handle--west { left: 0; }
-.resize-handle--east { right: 0; }
+.resize-handle--west {
+  left: 0;
+  top: var(--resize-corner);
+}
+
+/* 🚨 **右辺はタイトルバーの下から始める。** 右上には ✕ ボタンが座っていて、
+   辺を上端まで伸ばすと **ボタンの右 12px に透明な板が乗って押せなくなる**
+   （幅 8px の時点で既に一部重なっていた —— probe 点をボタン中央寄りに取っていたので
+   前回の当たり判定チェックをすり抜けた）。左辺は上に何も無いので角まで伸ばせる。 */
+.resize-handle--east {
+  right: 0;
+  top: var(--titlebar-height);
+}
 
 /* 角 */
 .resize-handle--north-west,
@@ -90,17 +103,17 @@
   cursor: nesw-resize;
 }
 
-/* ドラッグ中はポインタが縁から外れてもカーソルを保つ。 */
+/* ドラッグ中は文字選択が走らないようにする。
+   🚨 **ここでカーソルを指定しても効かないので置いていない。**
+   `startResizeDragging()` は native handoff で、**ドラッグ中はコンポジタがカーソルを所有する**
+   ＝ CSS の `cursor: ... !important` は無視される（方向別の 4 クラスを一度書いたが、
+   「縁から外れてもカーソルを保つ」という説明ごと嘘だったので消した）。
+   効くのはこの `user-select` だけ。 */
 body.is-resizing,
 body.is-resizing * {
   user-select: none !important;
   -webkit-user-select: none !important;
 }
-
-body.is-resizing-ew, body.is-resizing-ew * { cursor: ew-resize !important; }
-body.is-resizing-ns, body.is-resizing-ns * { cursor: ns-resize !important; }
-body.is-resizing-nwse, body.is-resizing-nwse * { cursor: nwse-resize !important; }
-body.is-resizing-nesw, body.is-resizing-nesw * { cursor: nesw-resize !important; }
 
 /* ── シェル ────────────────────────────────────────────────── */
 .app-shell {
@@ -134,7 +147,8 @@ body.is-resizing-nesw, body.is-resizing-nesw * { cursor: nesw-resize !important;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 40px;
+  /* ⚠️ リサイズハンドル（右辺の開始位置）が同じ値を見ているので、変数で 1 箇所に持つ。 */
+  height: var(--titlebar-height);
   flex-shrink: 0;
   background: var(--bg-color);
   border-bottom: 1px solid var(--border-color);
