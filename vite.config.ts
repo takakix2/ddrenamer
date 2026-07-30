@@ -56,6 +56,18 @@ export default defineConfig(async () => ({
   // ⚠️ `devCspFromTauriConf` は **dev に CSP を届ける唯一の経路**。外すと dev だけ CSP 不在になる。
   plugins: [react(), devCspFromTauriConf()],
 
+  build: {
+    // 🚨 **アセットを `data:` URI にインライン化させない。**
+    // 既定 (4096 バイト未満) だと、同梱フォントの unicode-range チャンクのうち小さい 2 個が
+    // `data:` に化け、**CSP が実際にそれを弾いていた**（`font-src` 指令を持たないので
+    // `default-src 'self'` に落ちる）。ブロックされた文字範囲は別フォントに落ちるだけなので、
+    // 画面は出るが「なんとなく字が違う」で終わり、気づく機会が無い。
+    //
+    // 直し方は 2 通りあって、**CSP を緩める (`font-src 'self' data:`) 方は採らなかった** ——
+    // 全部ファイルなら 'self' だけで足り、custom protocol 越しのローカル取得なので代償が無い。
+    assetsInlineLimit: 0,
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors
