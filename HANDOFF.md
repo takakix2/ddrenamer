@@ -3,8 +3,10 @@
 > このファイルは**現在の状態**を持つ。経緯（なぜそうなったか）は
 > `~/dev/agent-guidelines/logs/*-ddrenamer.md` にある。
 
-最終更新: 2026-07-30（blackcube セッション・2 回目）
-直近の変更: **i18n (ja/en) とテーマ切替 (4 種) を実装**＋**設定モーダルを新設**。
+最終更新: 2026-07-31（blackcube）
+直近の変更: **名前の番人を `join_name_ext` に集約**（空名バグを修正）＋
+**上書き防止ガードを名前比較から実体の同一性判定へ**（大小違いのファイルを壊していたのを修正）。
+その前（2026-07-30・2 回目）: **i18n (ja/en) とテーマ切替 (4 種) を実装**＋**設定モーダルを新設**。
 その前（同日 1 回目）: **UI を Tailwind v4 から `Lethe_UI_Kit` へ移行**（Tabula / Alethoglyph と
 ファミリー統一）＋**CSD 窓の窓操作を実装**（掴み・リサイズ・アイコン。どちらも「無かった」もの）。
 その前: macOS の UI 無反応を修正（`1d89a15` まで壊れていた・下記の解決済みセクション）
@@ -13,15 +15,18 @@
 
 ## 🎯 次にやること
 
-**名前の番人を 1 箇所に集約する。** 次の 2 つは**同じ継ぎ目**（`join_name_ext` の前後）に
-座っているので、別々に潰さず一度にやるのが良い（どちらも下に専用セクションがある）:
+**番人の置き場は決まった**（2026-07-31）。`join_name_ext` が `Result` を返すようになり、
+stem と ext が出会う 1 点で空名を弾く。**次はそこに Windows の検査を足すだけ**:
 
-1. 🐛 **空の名前 + 拡張子維持 で隠しファイルが作れる** —— 唯一残っている既知の正しさの欠陥
-2. 🪟 **Windows で置けない名前の検査が無い** —— 禁止文字・予約名・末尾のドット/空白
+1. 🪟 **Windows で置けない名前の検査が無い** —— 禁止文字 `<>:"/\|?*`・予約名（`CON` / `PRN` /
+   `AUX` / `NUL` / `COM1-9` / `LPT1-9`）・末尾のドット/空白。**`join_name_ext` の中に足す**
+   ＝ stem 系 6 経路に一度に効く
+   - ⚠️ **OS で検査を切り替えると、Linux で作った名前が Windows で開けない**という形で
+     跨いだときに壊れる。**常に一番厳しい規則で弾く**方に倒すのが筋（要判断）
+   - 📌 末尾ドットは既に 1 つ消えている（`Extension` を join 経由にしたので `photo.` が出ない）
 
-⇒ **モードごとにバラけている検査を、stem と ext が出会う 1 点に寄せる**のが本題。
-⚠️ 完成後の名前を再分割しても空 stem は検出できない（`Path::new(".jpg").file_stem()` は
-`Some(".jpg")`）ので、**join する前**に置くこと。
+⇒ ✅ **空の名前 + 拡張子維持 で隠しファイルが作れる**（修正済・下に専用セクション）
+⇒ ✅ **大小だけ違うファイルを黙って上書き**（修正済・下に専用セクション）
 
 そのあと配布に向けるなら **macOS 版の焼き直し**（m4air）。⚠️ **今 m4air に在る成果物は
 `1d89a15`** ＝ UI 移行も i18n も新アイコンも入っていない。しかも**今の中身は macOS で
@@ -231,9 +236,16 @@ blackcube の cursor theme が `whiteglass`（古い X11 名のみ）で `nwse-r
 
 | プラットフォーム | 焼いた場所 | 成果物 |
 |---|---|---|
-| Linux x86_64 | blackcube | ✅ **2026-07-30 に i18n + 新アイコンで焼き直し済み**: `deb 11M` / `rpm 11M` / `AppImage 83M`（サイズはフォント同梱ぶん） |
+| Linux x86_64 | blackcube | 🔶 **2026-07-30 の物**（i18n + 新アイコン入り）: `deb 11M` / `rpm 11M` / `AppImage 83M`。**2026-07-31 の番人の修正は未反映** |
 | macOS aarch64 | **m4air** | ⚠️ **`1d89a15` の物** ＝ UI 移行前・i18n 前・新アイコン前。`DDRenamer.app 13M` / `dmg 5.5M` |
 | Windows | — | ❌ **一度も焼いていない**（下の専用セクション） |
+
+📌 **成果物が現行 HEAD かを cargo 抜きで確かめる型**（2026-07-31 に確立）:
+`strings` で release バイナリから **Vite の内容ハッシュ名**（`assets/index-*.js` / `*.css`）を拾い、
+`vite build` し直した出力のファイル名と突き合わせる。内容ハッシュなので**名前が同じ ＝ 中身が同じ**。
+🚨 **`grep` で UI 文字列を探すのは無意味** —— Tauri は埋め込みアセットを圧縮するので、
+在っても 0 件になる（`DDRenamer` という ASCII すら出てこない。対照を取れば分かる）。
+⚠️ deb 内バイナリと `target/release/ddrenamer` の sha256 は **bundle 時の strip で一致しない**。
 
 ⚠️ **macOS 版は UI 移行も i18n も新アイコンも含んでいない。** 焼き直しが要る（下の follow-up）。
 🚨 **今の中身は macOS で一度も動かしていない**（`decorations` の修正は入っているが、その後の
@@ -373,42 +385,101 @@ Alacritty / Ghostty を許可しただけでは足りず、実行時に **"tmux"
 
 ---
 
-## 🐛 未修正: 空の名前 + 拡張子維持 で **隠しファイルが作れる**（2026-07-30 発見）
+## ✅ 修正済: 名前の番人を `join_name_ext` に集約（2026-07-31）
 
-**再現**: 「リネーム」タブで名前を**空のまま**ファイルを投入すると、
-`photo_a.jpg` → **`.jpg`** に成功する（実機で確認）。README は「空名バリデーション搭載」と
-謳っているが、通っている。
+2026-07-30 に見つかった **空の名前 + 拡張子維持 で隠しファイルが作れる**バグを直した。
 
-**機構**: `src-tauri/src/lib.rs`
-- `RenameCommand::Fixed` は `keep_ext && !ext.is_empty()` なら `join_name_ext(name, ext)` を返す
-  → `name` が空でも **`".jpg"`** という「空でない名前」になる（`lib.rs:156`）。
-- 最後の番人 `if new_name.is_empty()`（`lib.rs:282`）は**完成した名前**しか見ないので、
-  `".jpg"` は空ではない ＝ 素通りする。
+**元の形**: 「リネーム」タブで名前を空のまま投入すると `photo_a.jpg` → **`.jpg`** に成功していた。
+`Fixed` が `keep_ext` のとき `join_name_ext(name, ext)` を返すので、`name` が空でも
+`".jpg"` という「空でない名前」になり、最後の番人 `if new_name.is_empty()` は
+**完成した名前**しか見ないので素通りしていた。
 
-⇒ **stem が空かどうかを見ていない**のが穴。`Trim` 側には
-`Resulting name is empty after trim`（`lib.rs:243`）という別の番人が居るので、
-**モードごとに検査がバラけている**のが本当の形。
+**直し方**: `join_name_ext` を `Result<String, String>` にして、**その中で** stem の空を弾く。
 
-📌 UI 移行の実験（エラー行の CSS を確かめるために空名で撃った）で偶然踏んだもので、
-**今回の変更が作ったバグではない**。Rust 側の挙動変更になるので移行スコープ外にした。
+```rust
+fn join_name_ext(stem: &str, ext: &str) -> Result<String, String> {
+    if stem.trim().is_empty() { return Err("Name is empty".into()); }
+    ...
+}
+```
 
-### なぜ急ぐか
+⚠️ **検査は join の前**に置く必要がある —— `Path::new(".jpg").file_stem()` は `Some(".jpg")` を
+返す（dotfile 扱い）ので、完成後の名前を再分割しても空 stem は見えない。
+`join_name_ext` 自身が「stem と ext が出会う 1 点」なので、**持ち回る形に変えなくても
+そこが集約点になった**（HANDOFF は当初 `new_name_res` を stem/ext のまま持ち回る案を書いていたが、
+それは不要だった）。
+
+**効く範囲**: 呼び出し 6 経路（`Fixed` / `Serial` / `Add` / `Trim` / `Case` / `Convert`）＋
+join 経由に載せ替えた `Extension`。
+
+🚨 **ただし「6 つのバグを直した」ではない。** 実際に空 stem へ到達できるのは **`Fixed` だけ**:
+- `Case` / `Convert` は長さを保つ
+- `Add` は非空の stem の上に足す
+- `Trim` は自前の番人 `Trim count (n) exceeds name length (m)` が先に弾く
+- `Serial` は **`format!("{:0width$}", 0, width = 0)` が `"0"`** なので空にならない
+  （テスト `serial_always_has_a_digit_so_it_never_hits_the_guard` が固定してある）
+
+⇒ 集約の値打ちは**今の 1 件を塞ぐこと**より、**継ぎ目に不変条件が立ったこと**の方。
+Windows 検査もここに足せば 6 経路に一度に効く。
+
+📌 **空白だけの名前も弾く**（`stem.trim().is_empty()`）。`"   .jpg"` は Linux では作れてしまうが
+Windows では不正で、そもそも誰も意図しない。
+
+📌 **`Extension` の挙動が 1 つ変わった**: 拡張子欄を空にすると、以前は `photo.`（末尾ドット
+＝ Windows で不正）になっていたが、join 経由になったので **`photo`** になる ＝「拡張子を外す」。
+
+📌 `Replace` は**塞いでいない**。全体置換なので stem の概念が無く、`.gitignore` のような
+正当な dotfile 作成と機械的に区別できないため（下の Follow-Ups 参照）。
+
+### なぜ急いだか
 
 この道具は **Undo が無い**（Pending にある）。速く投げられるということは**速く間違えられる**
 ということで、機能を足すより**入口の番人**のほうが効く。しかもこのバグの結果は隠しファイルなので、
 **ファイラから消えたように見える**（ログには成功と出る）。静かに壊れる形なのが悪い。
 
-### 直し方（2 段構え）
+## ✅ 修正済: 大小だけ違うファイルを黙って上書きしていた（2026-07-31）
 
-**最小**: `Fixed` に stem の空検査を足す。`Trim` の `Resulting name is empty after trim`
-（`lib.rs:243`）と同じ作法で、status は英語に揃える（例: `Name is empty`）。
+**元の形**: 上書き防止ガードが、同一ファイルかどうかを**名前を小文字化した文字列**で判定していた。
 
-**構造**: 番人が**モードごとにバラけている**のが本体。本来は「stem と ext が出会う 1 点」で
-まとめて見たい。⚠️ ただし **完成後の名前を再分割しても検出できない** ——
-Rust の `Path::new(".jpg").file_stem()` は `Some(".jpg")` を返す（dotfile 扱い）ので、
-`".jpg"` は「stem が空」に見えない。**検査は join する前**（各モードが stem を返した時点）に
-置く必要がある。`new_name_res: Result<String, String>` を stem/ext のまま持ち回る形に変えると
-1 箇所に集約できる。
+```rust
+let old_lower = old_path.to_string_lossy().to_lowercase();
+let new_lower = new_path.to_string_lossy().to_lowercase();
+if old_lower != new_lower { return "Target exists" }   // ← 大小違いだと来ない
+```
+
+意図は正しい —— case-insensitive な FS（macOS / Windows）では `PHOTO.txt` → `photo.txt` の
+とき `new_path.exists()` が**同一ファイル**に当たって真になるので、それを許したかった。
+しかし **case-sensitive な FS（ext4）では `photo.txt` と `PHOTO.txt` は別々の実ファイル**で、
+この判定では区別できない。結果、`fs::rename` が宛先を黙って置換し、**status は `Success`**。
+
+🚨 **サイレントなデータ損失**。実測（ext4・`tempdir`）:
+
+```
+photo.txt (中身 VICTIM) と PHOTO.txt (中身 SUBJECT) が共存
+PHOTO.txt に Case→Lower
+  → status = "Success" / photo.txt の中身が SUBJECT に / VICTIM は消滅
+```
+
+⚠️ **開発機の Linux が一番危ない**。macOS / Windows は FS が case-insensitive なので通常は当たらない。
+
+**直し方**: 綴りではなく**実体の同一性**を訊く。`same-file` クレート（Unix は `dev`+`ino`、
+Windows はファイルインデックス）。**`Cargo.lock` に既に居た**（Tauri が walkdir 経由で引いている）
+ので、追加の取得もビルドも発生しない（lock の差分は +1 行）。
+
+```rust
+if new_path.exists() {
+    let is_self = same_file::is_same_file(old_path, &new_path).unwrap_or(false);
+    if !is_self { return ... "Target exists" ... }
+}
+```
+
+📌 `unwrap_or(false)` ＝ metadata が読めないときは「別物」に倒す ＝ **拒否側に落ちる**。
+
+⚠️ **`fs::canonicalize` の比較は使わなかった。** case-insensitive FS で入力どおりの綴りを
+返す保証がなく、**macOS で case-only リネームを塞ぐ**方向に倒れかねないため。
+
+**回帰テスト 3 本**: 別ファイルを壊さない / 同一ファイルの case-only は通る /
+無関係な既存ファイルへの上書きは従来どおり拒否。
 
 ## 🪟 未着手: Windows 対応（**一度も焼いていない**）
 
@@ -450,7 +521,13 @@ macOS 側と同じ **JSON Merge Patch の配列丸ごと置換**の罠を踏む�
 
 - 🔶 **macOS 版の焼き直しと配布判断。** UI 無反応は直ったので配れる状態になったが、
   **署名は adhoc のまま**（次項）。`--bundles app` でしか焼いていないので **dmg は未生成**。
-  ⚠️ **Linux の release も i18n 移行後は焼いていない**（最後の焼きは 2026-07-30 のフォント同梱時）。
+  ✅ **Linux は i18n + 新アイコンで焼き直し済み**（2026-07-30 16:01–16:04）。
+  2026-07-31 に検証: バイナリ埋め込みの Vite 内容ハッシュ名が HEAD からの再ビルドと一致。
+  ⚠️ **ただし 2026-07-31 の番人の修正は入っていない**（Rust を触ったので焼き直しが要る）。
+- 🔶 **`Replace` だけ空名の番人を通らない。** 全体置換なので stem の概念が無く、
+  `photo_a.jpg` に `photo_a` → `""` を当てると **`.jpg`** になる（`Fixed` で塞いだのと同じ結果に
+  別経路で着く）。⚠️ **塞ぐと `.gitignore` のような正当な dotfile 作成も巻き込む**ので、
+  「元が dotfile でないのに結果が `.` で始まる」を検出する形が要る。2026-07-31 に**意図的に保留**。
 - 🔶 **macOS のネイティブメニューに「設定… ⌘,」の項目が無い。** キーボードショートカットは
   実装したが、macOS で標準の入口である**メニュー項目**は Rust 側の menu 構築が要るので未着手。
 - 🔶 **Kit の `--layer-1` が宙ぶらりん**（`_settings.css` が参照するのに定義が無い）。
