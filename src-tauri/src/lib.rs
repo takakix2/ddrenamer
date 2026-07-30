@@ -196,7 +196,7 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
             if from.is_empty() {
                 return RenameResult {
                     path,
-                    status: "検索文字列が空です".into(),
+                    status: "Search string is empty".into(),
                     new_name: None,
                 };
             }
