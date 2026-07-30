@@ -15,6 +15,10 @@ import {
   Pencil,
   FileSignature,
   RotateCcw,
+  Minus,
+  Square,
+  Copy,
+  X,
 } from "lucide-react";
 
 // 選択メニューは Lethe_UI_Kit の共有コンポーネント（`src/ui-kit` は symlink）。
@@ -73,6 +77,25 @@ function App() {
   const handleMinimize = () => getCurrentWindow().minimize();
   const handleToggleMaximize = () => getCurrentWindow().toggleMaximize();
   const handleClose = () => getCurrentWindow().close();
+
+  /**
+   * 窓を掴んで動かす。
+   *
+   * 🚨 **`data-tauri-drag-region` 属性だけでは Linux で掴めない。**
+   * WebKitGTK は CSS の `-webkit-app-region: drag` を実装していないし（エラーも出ない）、
+   * 属性を置くだけでも当てにならない。**明示的に `startDragging()` を呼ぶのが Tauri の流儀**
+   * （権限 `core:window:allow-start-dragging` は capabilities に既に入っている）。
+   * Tabula の HeaderBar が同じ実装。
+   *
+   * ⚠️ **属性はイベント target 自身に要る**（バブリングして来た子要素には効かない）ので、
+   * 掴ませたい入れ子には全部付ける。アイコン等は `pointer-events: none` で親に透過させる。
+   */
+  const handleDrag = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).hasAttribute("data-tauri-drag-region")) {
+      getCurrentWindow().startDragging();
+    }
+  };
+
 
   // --- Config States ---
 
@@ -298,19 +321,19 @@ function App() {
   return (
     <div className="app-shell">
       {/* CSD Titlebar — on macOS the native traffic lights sit here instead */}
-      <div className="titlebar" data-tauri-drag-region>
+      <div className="titlebar" data-tauri-drag-region onPointerDown={handleDrag}>
         {!isMac && (
           <>
             <span className="titlebar-title" data-tauri-drag-region>DDRenamer</span>
             <div className="titlebar-buttons">
               <button className="titlebar-btn" onClick={handleMinimize} title="最小化">
-                <span style={{ fontSize: '14px', lineHeight: 1 }}>─</span>
+                <Minus size={16} />
               </button>
-              <button className="titlebar-btn" onClick={handleToggleMaximize} title="最大化">
-                <span style={{ fontSize: '10px', lineHeight: 1 }}>{isMaximized ? '❐' : '□'}</span>
+              <button className="titlebar-btn" onClick={handleToggleMaximize} title={isMaximized ? "元のサイズに戻す" : "最大化"}>
+                {isMaximized ? <Copy size={13} /> : <Square size={13} />}
               </button>
               <button className="titlebar-btn close" onClick={handleClose} title="閉じる">
-                <span style={{ fontSize: '12px', lineHeight: 1 }}>✕</span>
+                <X size={16} />
               </button>
             </div>
           </>
@@ -558,6 +581,7 @@ function App() {
         <div
           className={`logbar ${showLogs ? "expanded" : ""}`}
           data-tauri-drag-region={showLogs ? undefined : true}
+          onPointerDown={handleDrag}
           style={{ cursor: showLogs ? undefined : 'grab' }}
         >
           {/* 📌 右の `.logbar-actions` は設定（歯車）の席。行を button で包まないのは

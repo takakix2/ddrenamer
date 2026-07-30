@@ -31,21 +31,31 @@
 }
 
 /* ── CSD タイトルバー ─────────────────────────────────────────
-   📌 **32px の帯は全プラットフォームで残す。** ドラッグ領域であると同時に、
+   📌 **この帯は全プラットフォームで残す。** ドラッグ領域であると同時に、
    設定ボタン（i18n / テーマの入口）を置ける唯一の共通の土地。
    macOS では中身だけ出し分ける（ネイティブの信号機がここに座る）。
+
+   高さは 32px から **40px** にした（2026-07-30）——「掴みにくい」という実使用の報告。
+   ⚠️ 掴みにくさの主因は高さではなく **`startDragging()` を呼んでいなかったこと**
+   （`App.tsx` の `handleDrag` を参照）。高さは狙いやすさの上乗せ。
    ─────────────────────────────────────────────────────────── */
 .titlebar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 32px;
+  height: 40px;
   flex-shrink: 0;
   background: var(--bg-color);
   border-bottom: 1px solid var(--border-color);
   user-select: none;
   -webkit-user-select: none;
   cursor: grab;
+}
+
+/* ⚠️ ボタンの中の svg は当たり判定を持たせない。持たせると
+   「アイコンの上で mousedown した」判定になり、click が取りこぼされる。 */
+.titlebar-btn svg {
+  pointer-events: none;
 }
 
 .titlebar-title {
@@ -62,8 +72,8 @@
 }
 
 .titlebar-btn {
-  width: 32px;
-  height: 28px;
+  width: 40px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
