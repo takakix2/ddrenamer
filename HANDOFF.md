@@ -3,7 +3,7 @@
 > このファイルは**現在の状態**を持つ。経緯（なぜそうなったか）は
 > `~/dev/agent-guidelines/logs/*-ddrenamer.md` にある。
 
-最終更新: 2026-08-01（**m4air で実機確認を完了**）
+最終更新: 2026-08-01（**m4air で実機確認 + 署名/notarize を完了 ＝ macOS 版は配れる**）
 直近の変更: **macOS 実機で全項目が通った**（下の「macOS 実機確認」）。
 ⚠️ **前提が 1 つ崩れた** —— 「メニューが無いから `⌘C`/`⌘V` が効かないはず」は**誤り**で、
 **Tauri v2 が macOS にだけ既定メニューを勝手に付けている**（`lib.rs` にコードは無い）。
@@ -56,9 +56,10 @@ Edit ロール一式が既定で入っており、WKWebView が undo manager を
 
 ### ⏸ 残っているもの
 
-- **配布はまだできない。** `spctl -a -vv` は
-  `code has no resources but signature indicates they must be present` で**弾く**（adhoc 署名の限界）。
-  ローカルビルドは quarantine 属性が無いので起動はする。配るなら Developer ID + notarize。
+- ✅ **署名・notarize は 2026-08-01 に完了**（下の専用セクション）。**配れる状態**。
+- 🔴 **LICENSE が未決** —— README は `MIT License (or Unlicense)` の**まま**で、
+  **LICENSE ファイルも無い**。公開するなら `(or)` を消して 1 つ選ぶ必要がある。
+- 🔶 **配布先が未決**（`.github/FUNDING.yml` だけ在るので GitHub Releases が自然か）。
 - **設定… `⌘,`** のメニュー項目（キーは効く・項目が無いだけ。上の 🚨 を読んでから）
 
 ---
@@ -291,7 +292,8 @@ blackcube の cursor theme が `whiteglass`（古い X11 名のみ）で `nwse-r
 | プラットフォーム | 焼いた場所 | 成果物 |
 |---|---|---|
 | Linux x86_64 | blackcube | ✅ **2026-07-31 10:1x に焼き直し済み**（番人の修正 + Undo 入り）: `deb 11M` / `rpm 11M` / `AppImage 83M`。**`~/.local/bin/ddrenamer` も差し替え済み**（旧版は `1e5ee7f` 相当） |
-| macOS aarch64 | **m4air** | ✅ **2026-07-31 に `71408fc` で焼き直し済み**（番人 + Undo 入り）: `DDRenamer.app 18M` / **`dmg 9.4M`**（前回は dmg 未生成）。arm64。✅ **2026-08-01 に実機で操作確認済み**（上のセクション） |
+| macOS **universal** | **m4air** | ✅ **2026-08-01 に署名 + notarize 済み**: `DDRenamer.app 35M` / **`dmg 19M`**（`DDRenamer_0.1.0_universal.dmg`）。**x86_64 + arm64**。`spctl` が **accepted / Notarized Developer ID**。⇒ **配れる** |
+| ~~macOS aarch64~~ | m4air | ⚠️ 2026-07-31 の `71408fc` 版（adhoc 署名・arm64 のみ）。**実機の操作確認はこれで行った**が、配布物としては上の universal 版が正。`target/release/bundle/` の方は**旧物なので破棄してよい** |
 | Windows | — | ❌ **一度も焼いていない**（下の専用セクション） |
 
 ### 成果物が現行 HEAD かを確かめる型（2026-07-31 に確立）
@@ -339,19 +341,47 @@ blackcube の cursor theme が `whiteglass`（古い X11 名のみ）で `nwse-r
 ただし **AX で測れるのはウィンドウ層まで**なので、クリックや打鍵は人の手が要る。
 ⇒ **人が操作 → こちらが AX / `ls` / mtime で機械照合**、が実際に回った型。
 
-- ⚠️ **署名は adhoc**（`TeamIdentifier=not set`）。`spctl -a -vv` は
-  `code has no resources but signature indicates they must be present` で**弾く**。
-  配るなら Developer ID + notarize。
+- ✅ **署名は 2026-08-01 に解決**（旧: adhoc で `TeamIdentifier=not set`）。下の専用セクション。
 - ✅ **UI 無反応（`1d89a15`）は解決済み**（下記セクション）。あの `.app` / `.dmg` は
   **操作不能なので破棄すること**。
 
-### macOS 版を焼く手順（m4air）
+### ✅ macOS 版を焼く手順（m4air・**署名 + notarize 込み**・2026-08-01 に確立）
 
 ```bash
 ssh m4air
 export PATH="$HOME/.bun/bin:$PATH"     # bun は PATH に無い。node/npm は存在しない
-cd ~/dev/DDRenamer && git pull && bun run tauri build
+cd ~/dev/DDRenamer && git pull
+
+export APPLE_SIGNING_IDENTITY="Developer ID Application: Takayuki Nine (K8K944Y32N)"
+export APPLE_ID="<apple-id>"
+export APPLE_TEAM_ID="K8K944Y32N"
+export APPLE_PASSWORD="$(security find-generic-password -s 'TABULA NOTARIZE' -w)"   # 🚨 下記
+bun run tauri build --target universal-apple-darwin
+
+# 🚨 tauri は .app しか notarize しない。dmg は署名するだけで「2 bundles 完成」と言う
+DMG=src-tauri/target/universal-apple-darwin/release/bundle/dmg/DDRenamer_0.1.0_universal.dmg
+xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" \
+  --password "$(security find-generic-password -s 'TABULA NOTARIZE' -w)" \
+  --team-id "$APPLE_TEAM_ID" --wait
+xcrun stapler staple "$DMG"
+
+# 外から確かめる（exit code を信じない）
+spctl -a -vv -t open --context context:primary-signature "$DMG"   # → accepted / Notarized Developer ID
+xcrun stapler validate "$DMG"                                     # → オフラインでも通る証拠
 ```
+
+🚨 **`APPLE_PASSWORD="@keychain:TABULA NOTARIZE"` と書いてはいけない。**
+`notarytool` が解決に失敗し、**認証情報が正しいのに `HTTP 401 Invalid credentials`** で落ちる
+（2026-08-01 に実測。項目名の空白が原因と思われるが未確定）。**実値を渡すこと**。
+⚠️ **401 を「パスワードが失効した」と読まない。** 切り分けは `xcrun notarytool history` を
+2 通りの渡し方で叩けば **5 秒**で付く（何も提出せずに認証だけ試せる）。
+
+🚨 **`| tail` にパイプすると `$?` が `tail` の終了コードになる。** 実際 2026-08-01 に、
+notarize が 401 で落ちているのに「exit 0」と記録しかけた。`set -o pipefail` を使うか、
+ログをファイルに落として本体の `$?` を取ること。⇒ [[verify-positive-evidence-not-absence]] の系。
+
+📌 **`rustup target add x86_64-apple-darwin` が要る**（universal ビルドのため。初回のみ）。
+📌 ビルド時間は universal で **cold 5 分 / warm 2 分**（M4 Air・他の cargo と並行して）。
 
 ⚠️ **clone は `git clone gitea:takaki2/DDRenamer.git`**。m4air の `~/.ssh/config` は
 `Host gitea` ＋ `IdentitiesOnly yes` なので、**生の `ssh://git@192.168.1.10:222/...` は鍵が選ばれず弾かれる**。
@@ -774,7 +804,11 @@ ZFS スナップショットや git を持っている使い手は、もっと�
   **Tabula (`style.css:259`) / Alethoglyph (`App.css:678`) / DDRenamer (`App.css`) が
   同じものを 3 箇所で書いている**。Kit の `_inputs.css` に上げるべきだが、
   横断変更（lethe-client / Lethe Web UI も巻き込む）なので今回はやっていない。
-- ⏸ **署名 / notarize の方針**（現状 adhoc）。配る段になったら Developer ID が要る。
+- ✅ **署名 / notarize は完了**（2026-08-01・上の「macOS 版を焼く手順」）。
+  Developer ID + Hardened Runtime + セキュアタイムスタンプ + staple まで通り、
+  **quarantine 属性を貼った dmg でも `accepted`**（＝ダウンロードした人の経路を再現して確認）。
+  `stapler validate` も通るので**オフラインでも起動する**。
+  🔴 **残るのは LICENSE と配布先だけ**（コードを書かない仕事）。
 - ⏸ **フォント同梱でバンドルが倍になった**（deb 5.2M → 11M）。絞るなら subset だが、
   欠けた文字が豆腐にならず別フォントに落ちるので**壊れても気づけない**。今は絞らない判断。
 - ⏸ **`bun run tauri dev` の起動確認は XWayland 経由でしかしていない**
