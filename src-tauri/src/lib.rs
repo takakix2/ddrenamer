@@ -72,6 +72,11 @@ pub struct RenameResult {
     path: String,
     status: String,
     new_name: Option<String>,
+    /// Where the file actually ended up, absolute. Undo needs to name the file
+    /// it is reversing, and the caller should not have to rebuild this from the
+    /// old path and a bare filename -- that means guessing a separator and
+    /// re-deriving something this function already computed.
+    new_path: Option<String>,
 }
 
 // --- Character width conversion helpers ---
@@ -128,6 +133,7 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
             path,
             status: "File not found".into(),
             new_name: None,
+            new_path: None,
         };
     }
 
@@ -138,6 +144,7 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
                 path,
                 status: "Invalid path".into(),
                 new_name: None,
+                new_path: None,
             }
         }
     };
@@ -149,6 +156,7 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
                 path,
                 status: "Invalid filename".into(),
                 new_name: None,
+                new_path: None,
             }
         }
     };
@@ -210,6 +218,7 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
                     path,
                     status: "Search string is empty".into(),
                     new_name: None,
+                    new_path: None,
                 };
             }
             if *use_regex {
@@ -244,6 +253,7 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
                         count, len
                     ),
                     new_name: None,
+                    new_path: None,
                 };
             }
 
@@ -257,6 +267,7 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
                     path,
                     status: "Resulting name is empty after trim".into(),
                     new_name: None,
+                    new_path: None,
                 };
             }
 
@@ -300,6 +311,7 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
                     path,
                     status: "Resulting name is empty".into(),
                     new_name: None,
+                    new_path: None,
                 };
             }
 
@@ -311,6 +323,7 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
                     path,
                     status: "Success".into(),
                     new_name: Some(new_name),
+                    new_path: Some(new_path.to_string_lossy().into_owned()),
                 };
             }
 
@@ -331,6 +344,7 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
                         path,
                         status: format!("Target exists: {}", new_name),
                         new_name: None,
+                        new_path: None,
                     };
                 }
             }
@@ -340,11 +354,13 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
                     path,
                     status: "Success".into(),
                     new_name: Some(new_name),
+                    new_path: Some(new_path.to_string_lossy().into_owned()),
                 },
                 Err(e) => RenameResult {
                     path,
                     status: e.to_string(),
                     new_name: None,
+                    new_path: None,
                 },
             }
         }
@@ -352,6 +368,7 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
             path,
             status: e,
             new_name: None,
+            new_path: None,
         },
     }
 }
@@ -657,5 +674,85 @@ mod tests {
 
         assert_eq!(res.status, "Success");
         assert_eq!(res.new_name.unwrap(), "photo");
+    }
+    // --- Undo の契約 ---
+    //
+    // Undo does not get its own command. Reversing a rename is a rename back to
+    // the original full name, which means it goes through the same guards --
+    // the identity check and the refusal to overwrite -- without anyone having
+    // to remember to apply them. These tests hold that arrangement in place.
+
+    #[test]
+    fn undo_is_just_a_fixed_rename_back() {
+        let dir = tempdir().unwrap();
+        let orig = dir.path().join("photo_a.jpg");
+        std::fs::write(&orig, b"DATA").unwrap();
+
+        // 1) 普通にリネーム
+        let res = handle_rename(
+            orig.to_str().unwrap().into(),
+            RenameCommand::Fixed { name: "IMG_001".into(), keep_ext: true },
+        );
+        assert_eq!(res.status, "Success");
+        let new_name = res.new_name.unwrap();
+        assert_eq!(new_name, "IMG_001.jpg");
+        let new_path = dir.path().join(&new_name);
+        assert!(new_path.exists() && !orig.exists());
+
+        // 2) 元の「フルネーム」を Fixed(keep_ext=false) で当てて戻す
+        let back = handle_rename(
+            new_path.to_str().unwrap().into(),
+            RenameCommand::Fixed { name: "photo_a.jpg".into(), keep_ext: false },
+        );
+        assert_eq!(back.status, "Success");
+        assert_eq!(back.new_name.unwrap(), "photo_a.jpg");
+        assert!(orig.exists() && !new_path.exists());
+        assert_eq!(std::fs::read(&orig).unwrap(), b"DATA");
+    }
+
+    #[test]
+    fn undo_is_refused_when_the_old_name_got_taken() {
+        let dir = tempdir().unwrap();
+        let orig = dir.path().join("photo_a.jpg");
+        std::fs::write(&orig, b"DATA").unwrap();
+
+        let res = handle_rename(
+            orig.to_str().unwrap().into(),
+            RenameCommand::Fixed { name: "IMG_001".into(), keep_ext: true },
+        );
+        assert_eq!(res.status, "Success");
+        let new_path = dir.path().join(res.new_name.unwrap());
+
+        // 誰かが元の名前の場所に別のファイルを置いた
+        std::fs::write(&orig, b"SOMEONE ELSE").unwrap();
+
+        let back = handle_rename(
+            new_path.to_str().unwrap().into(),
+            RenameCommand::Fixed { name: "photo_a.jpg".into(), keep_ext: false },
+        );
+        assert!(back.status.starts_with("Target exists"), "got {:?}", back.status);
+        assert_eq!(std::fs::read(&orig).unwrap(), b"SOMEONE ELSE", "他人のファイルを潰した");
+        assert!(new_path.exists(), "戻せなかったのに元のファイルが消えた");
+    }
+
+    #[test]
+    fn undo_of_a_case_only_rename_round_trips() {
+        let dir = tempdir().unwrap();
+        let orig = dir.path().join("photo.txt");
+        std::fs::write(&orig, b"DATA").unwrap();
+
+        let res = handle_rename(
+            orig.to_str().unwrap().into(),
+            RenameCommand::Case { mode: CaseMode::Upper },
+        );
+        assert_eq!(res.status, "Success");
+        let new_path = dir.path().join(res.new_name.unwrap());
+
+        let back = handle_rename(
+            new_path.to_str().unwrap().into(),
+            RenameCommand::Fixed { name: "photo.txt".into(), keep_ext: false },
+        );
+        assert_eq!(back.status, "Success", "大小だけ戻す Undo が通らない");
+        assert_eq!(std::fs::read(&orig).unwrap(), b"DATA");
     }
 }

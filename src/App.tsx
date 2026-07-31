@@ -21,6 +21,7 @@ import {
   Copy,
   X,
   Settings,
+  Undo2,
 } from "lucide-react";
 
 // 選択メニューは Lethe_UI_Kit の共有コンポーネント（`src/ui-kit` は symlink）。
@@ -53,6 +54,32 @@ interface LogEntry {
   success: boolean;
 }
 
+/**
+ * 1 件の戻し。`path` は**今そのファイルが在る場所**、`oldName` は戻す名前。
+ *
+ * 📌 Undo に専用のコマンドは無い。`Fixed { keep_ext: false }` で元のフルネームを当てるのが
+ * そのまま戻す操作になり、**リネームと同じ番人**（同一性判定・上書き拒否）を必ず通る。
+ * 迂回する道を作らないための形なので、ここを独自実装に置き換えないこと。
+ */
+interface UndoStep {
+  path: string;
+  oldName: string;
+}
+
+/**
+ * 1 ドロップ = 1 バッチ。
+ *
+ * ⚠️ `serialAdvance` は連番タブが進めたカウンタの量。戻すときに引かないと、
+ * 次のドロップが**ずれた番号から始まる**。
+ */
+interface UndoBatch {
+  steps: UndoStep[];
+  serialAdvance: number;
+}
+
+/** 履歴を無限に伸ばさない。 */
+const UNDO_HISTORY_LIMIT = 20;
+
 let logIdCounter = 0;
 function nextLogId(): string {
   return `log-${Date.now()}-${logIdCounter++}`;
@@ -70,6 +97,20 @@ function App() {
   const [isMaximized, setIsMaximized] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
+
+  /**
+   * Undo 履歴。
+   *
+   * 🚨 **ログ配列に相乗りさせないこと。** `logs` は 50 件で打ち切っているので、
+   * 大量ドロップすると履歴が**静かに落ちる**。
+   *
+   * 🚨 **ref で持つ理由**: ドロップと keydown の `useEffect` が deps `[]` で
+   * 初回レンダーのクロージャを握っている（`configRef` が在るのと同じ事情）。
+   * state だけで持つと `Ctrl+Z` が**常に空の履歴**を見る。
+   * `canUndo` はボタンの活性表示のためだけの写し。
+   */
+  const undoHistoryRef = useRef<UndoBatch[]>([]);
+  const [canUndo, setCanUndo] = useState(false);
 
   const handleThemeChange = (next: Theme) => {
     setTheme(next);
@@ -196,6 +237,7 @@ function App() {
     const { activeTab } = cfg;
 
     const newLogs: LogEntry[] = [];
+    const undoSteps: UndoStep[] = [];
 
     for (let i = 0; i < paths.length; i++) {
         const filePath = paths[i];
@@ -249,10 +291,20 @@ function App() {
         }
 
         try {
-          const res: { path: string; status: string; new_name?: string } = await invoke(
-            "handle_rename",
-            { path: filePath, cmd }
-          );
+          const res: {
+            path: string;
+            status: string;
+            new_name?: string;
+            new_path?: string;
+          } = await invoke("handle_rename", { path: filePath, cmd });
+          // 戻す材料は**表示文字列からではなく構造から**取る。
+          // `status` は `-> IMG_001.jpg` という見せるための値で、状態ではない。
+          if (res.status === "Success" && res.new_path) {
+            const oldName = filePath.slice(
+              Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\")) + 1,
+            );
+            undoSteps.push({ path: res.new_path, oldName });
+          }
           newLogs.unshift({
             id: nextLogId(),
             path: res.path,
@@ -278,13 +330,81 @@ function App() {
     setLogs((prev) => [...newLogs, ...prev].slice(0, 50));
 
     // Auto-increment serial start if we did serial renames
+    let serialAdvance = 0;
     if (activeTab === "serial") {
       const successCount = newLogs.filter((log) => log.success).length;
       if (successCount > 0) {
+        serialAdvance = successCount;
         setSerialStart((prev) => prev + successCount);
       }
     }
+
+    if (undoSteps.length > 0) {
+      undoHistoryRef.current = [
+        ...undoHistoryRef.current,
+        { steps: undoSteps, serialAdvance },
+      ].slice(-UNDO_HISTORY_LIMIT);
+      setCanUndo(true);
+    }
   };
+
+  /**
+   * 直前のバッチを戻す。
+   *
+   * ⚠️ **元の順序で戻すこと（逆順にしない）。** 1 バッチの中で `photo1 -> photo2` と
+   * `photo2 -> photo3` が起きていると、逆順では `photo3 -> photo2` が既存の `photo2` と
+   * ぶつかる。元の順序なら常に**空いた先**へ戻る。
+   *
+   * ⚠️ **Undo が生んだ行は履歴に積まない。** 積むと ↶ の連打で戻ったり戻らなかったりする。
+   */
+  const undoLast = async () => {
+    const history = undoHistoryRef.current;
+    const batch = history[history.length - 1];
+    if (!batch) return;
+
+    undoHistoryRef.current = history.slice(0, -1);
+    setCanUndo(undoHistoryRef.current.length > 0);
+
+    const newLogs: LogEntry[] = [];
+    for (const step of batch.steps) {
+      try {
+        const res: { path: string; status: string; new_name?: string } = await invoke(
+          "handle_rename",
+          {
+            path: step.path,
+            cmd: { mode: "Fixed", config: { name: step.oldName, keep_ext: false } },
+          },
+        );
+        newLogs.unshift({
+          id: nextLogId(),
+          path: res.path,
+          status: res.new_name ? `-> ${res.new_name}` : res.status,
+          timestamp: new Date().toLocaleTimeString(i18nInstance.language),
+          success: res.status === "Success",
+        });
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        newLogs.unshift({
+          id: nextLogId(),
+          path: step.path,
+          status: `Error: ${message}`,
+          timestamp: new Date().toLocaleTimeString(i18nInstance.language),
+          success: false,
+        });
+      }
+    }
+
+    setLogs((prev) => [...newLogs, ...prev].slice(0, 50));
+    if (batch.serialAdvance > 0) {
+      setSerialStart((prev) => Math.max(1, prev - batch.serialAdvance));
+    }
+  };
+
+  // `Ctrl+Z` は deps [] の keydown ハンドラから呼ぶので、ref 越しに最新を見せる。
+  const undoLastRef = useRef(undoLast);
+  useEffect(() => {
+    undoLastRef.current = undoLast;
+  });
 
   // --- Drag-Drop Event (Tauri v2 API) ---
   useEffect(() => {
@@ -329,6 +449,15 @@ function App() {
 
       // ignore if input is focused
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      // ⚠️ **入力欄の early-return より後**に置く（`⌘,` とは逆）。
+      // 名前欄で打ち間違えたときの `Ctrl+Z` は「文字を戻す」であって
+      // 「リネームを戻す」ではない。`Ctrl+V` と同じ土地の話。
+      if (modifier && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        undoLastRef.current();
         return;
       }
 
@@ -656,6 +785,16 @@ function App() {
               </span>
             </button>
             <div className="logbar-actions">
+              {/* 📌 畳んでいてもヘッダは見える。Undo が要るのは*やらかした直後*で、
+                  そのときバーはまず畳まれているので、本文でなくここに置く。 */}
+              <button
+                className="logbar-icon-btn"
+                onClick={undoLast}
+                disabled={!canUndo}
+                title={`${t("logbar.undo")} (${isMac ? "⌘Z" : "Ctrl+Z"})`}
+              >
+                <Undo2 size={15} />
+              </button>
               <button
                 className="logbar-icon-btn"
                 onClick={() => setShowSettings(true)}

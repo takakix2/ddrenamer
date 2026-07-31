@@ -822,7 +822,15 @@ body.is-resizing * {
   transition: background 0.15s, color 0.15s;
 }
 
-.logbar-icon-btn:hover {
+.logbar-icon-btn:hover:not(:disabled) {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+
+/* 戻すものが無いとき。Kit の `.btn:disabled` と同じ作法に揃える
+   （`opacity: 0.5` + `not-allowed`）。⚠️ hover を `:not(:disabled)` で
+   閉じておかないと、押せないボタンが押せるように光る。 */
+.logbar-icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

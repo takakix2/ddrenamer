@@ -49,7 +49,8 @@
   },
   "logbar": {
     "title": "Execution log",
-    "empty": "No history yet"
+    "empty": "No history yet",
+    "undo": "Undo the last batch"
   },
   "settings": {
     "open": "Settings",
