@@ -79,5 +79,13 @@ bun run tauri build
 - **Wayland (Linux)**: デスクトップ環境の制約により、ファイルマネージャーからのドラッグ＆ドロップが動作しない場合があります。`Ctrl+V` ペーストは全環境で動作します。
 
 ## 📜 ライセンス
-MIT License (or Unlicense) - This is a personal restoration project.
-Based on the concept of original DDRenamer by soft.NU.
+MIT License (or Unlicense) - This is a personal project.
+
+## 🌱 着想について
+
+「ドロップゾーンに投げ込むだけでリネームが終わる」という発想は、soft.NU の
+**[Drag&Drop Renamer](http://nu.way-nifty.com/top/dragdrop_renamer/index.html)** に由来します。
+
+⚠️ **本アプリは同作の移植でも後継でもありません。** 名前も異なり、実装・UI・機能は独自のものです
+（Tauri v2 + Rust による作り直しで、Undo / i18n / テーマ / 正規表現置換 などは本アプリ固有）。
+着想を得た先として敬意を込めて記載しています。
