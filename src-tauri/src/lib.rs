@@ -566,6 +566,23 @@ mod tests {
 
     // --- Guards: the two bugs filed on 2026-07-30 ---
 
+    /// The exact names the directory itself reports, sorted.
+    ///
+    /// 🚨 `Path::exists()` cannot answer "what is this file called" on a
+    /// case-insensitive filesystem: it says yes for `photo.txt` while
+    /// `PHOTO.txt` is what is stored. Neither can `RenameResult::new_name`,
+    /// which is the name *we computed*, not the one that landed. Asking the
+    /// directory is the only way to tell whether a case-only rename actually
+    /// took effect.
+    fn names_on_disk(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
     /// Does the filesystem under `dir` tell `a` and `A` apart?
     ///
     /// Deliberately not a `cfg(windows)` question. macOS is Unix and
@@ -632,6 +649,14 @@ mod tests {
 
         assert_eq!(res.status, "Success");
         assert_eq!(res.new_name.unwrap(), "PHOTO.txt");
+        // ⚠️ The two asserts above only say what we computed and reported.
+        // Ask the directory what is actually stored -- on a case-insensitive
+        // filesystem every other way of checking answers yes to both spellings.
+        assert_eq!(
+            names_on_disk(dir.path()),
+            vec!["PHOTO.txt"],
+            "the case-only rename did not reach the filesystem"
+        );
     }
 
     /// An unrelated existing target is still refused.
@@ -923,6 +948,7 @@ mod tests {
         );
         assert_eq!(res.status, "Success");
         let new_path = dir.path().join(res.new_name.unwrap());
+        assert_eq!(names_on_disk(dir.path()), vec!["PHOTO.txt"], "リネームが載っていない");
 
         let back = handle_rename(
             new_path.to_str().unwrap().into(),
@@ -930,5 +956,13 @@ mod tests {
         );
         assert_eq!(back.status, "Success", "大小だけ戻す Undo が通らない");
         assert_eq!(std::fs::read(&orig).unwrap(), b"DATA");
+        // ⚠️ 中身の照合だけでは足りない。case-insensitive な FS では
+        // `PHOTO.txt` のままでも `photo.txt` として読めてしまうので、
+        // 「戻った」と誤読する。名前そのものを見る。
+        assert_eq!(
+            names_on_disk(dir.path()),
+            vec!["photo.txt"],
+            "内容は戻ったが名前の大小が戻っていない"
+        );
     }
 }
