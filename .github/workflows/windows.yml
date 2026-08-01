@@ -1,0 +1,60 @@
+# Prove the app builds for Windows -- and, more usefully, run the test suite
+# on a real Windows filesystem.
+#
+# There is no Windows machine on the LAN, so until one arrives this is the only
+# place the guards get exercised where they matter:
+#
+#   - the overwrite guard asks same-file for identity because a case-insensitive
+#     filesystem reports the rename target as "already existing" when it IS the
+#     file being renamed. That path has only ever run on ext4, which is
+#     case-sensitive, so the branch it was written for is untested.
+#   - the portable-name guard refuses what Windows refuses. It has never run
+#     anywhere that actually refuses those names.
+#
+# What this does NOT prove: that the app is usable. macOS shipped a build whose
+# window drew perfectly and ignored every click, and a green pipeline would have
+# said nothing about it. Windows uses the same custom-decoration path as Linux,
+# so the shell still needs a pair of hands.
+name: Windows
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      # Run before the bundle: a rename that eats a file should fail the job in
+      # two minutes, not after the installers are built.
+      - name: Test on a real Windows filesystem
+        run: cargo test --manifest-path src-tauri/Cargo.toml -- --nocapture
+
+      - name: Build the bundles
+        run: bun run tauri build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-bundles
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
