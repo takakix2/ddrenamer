@@ -801,7 +801,28 @@ LAN に Windows 機が無いので **GitHub Actions (`windows-latest`)** に置�
 （`.github/workflows/windows.yml`）。Gitea には runner が居ないので CI は GitHub 側にしか置けない。
 狙いは installer より **テストを実 Windows のファイルシステムで走らせること**。
 
-### 初回の結果: **21 通過 / 1 失敗** —— 失敗はガードではなくテストの前提だった
+### ✅ 現在: **緑**（`30680237956`）。Windows の成果物が初めて焼けた
+
+```
+DDRenamer_0.1.0_x64_en-US.msi
+DDRenamer_0.1.0_x64-setup.exe     ← artifact "windows-bundles" (16MB)
+```
+
+**22 テスト全通過。** 実 Windows で初めて確かめられたこと:
+
+- ✅ **case-only リネームは本当にディスクに載る**（`read_dir` が `PHOTO.txt` を返す）。
+  これは今日まで**どのプラットフォームでも未検証**だった —— テストは `res.new_name`
+  という**自分が計算した値**を見ていただけで、`Path::exists()` は case-insensitive では
+  両方の綴りに真を返すので判定に使えない
+- ✅ 移植性の名前検査が、**実際にその名前を拒否する OS** の上で通った
+- ✅ `case_only_rename_does_not_destroy_a_distinct_file` は理由付きで skip
+  （ログに `skipped: this filesystem is case-insensitive...` が出ている ＝ 黙って消えていない）
+
+⏸ **触ってはいない。** msi / exe が焼けただけで、**実機で操作した人はまだ居ない**。
+
+### そこに至るまでに CI が見つけた 2 件
+
+**① 21 通過 / 1 失敗 —— 失敗はガードではなくテストの前提だった**
 
 ```
 case_only_rename_does_not_destroy_a_distinct_file ... FAILED
@@ -821,6 +842,33 @@ case_only_rename_does_not_destroy_a_distinct_file ... FAILED
 Linux も case-insensitive でマウントできるので、**ターゲット三つ組では答えが出ない**。
 `filesystem_is_case_sensitive()` で**目の前の FS に訊いて**、作れない環境では理由付きで skip する。
 📌 ext4 では skip されずに実際に走ることを確認済み（skip が常時発動して緑になる罠の陰性対照）。
+
+**② 🚨 このリポは fresh clone からビルドできなかった**
+
+`src/ui-kit` が **symlink としてコミット**されていて、指す先はリポの外（`../../Lethe_UI_Kit`）。
+CI は fresh clone なので `tsc` が `CustomSelect` を解決できずに落ちた。
+⇒ **GitHub は public なので、誰が clone してもビルドできない状態だった。**
+
+📌 **fresh clone で壊れるのは 2 回目**（1 回目は `.gitignore` の `*.png` がアイコン 44 枚を
+飲んでいた件）。**「周りのツリーが在る機械でだけ動く」**がこのリポの持病。
+
+**直し方**: `Lethe_UI_Kit` を **GitHub に public ミラー**（`takakix2/Lethe_UI_Kit`）し、
+`src/ui-kit` は追跡から外して **`postinstall`（`scripts/setup-ui-kit.ts`）が用意する**:
+
+| 状況 | すること |
+|---|---|
+| 既に使える | 触らない |
+| 隣に `Lethe_UI_Kit` が在る | **symlink**（Kit を直すと 5 アプリに即反映、を温存） |
+| どちらも無い | ミラーから `--depth 1` clone |
+
+⚠️ **判定は「ディレクトリが在るか」ではなく中の実ファイル**（`themes/_variables.css`）を見る。
+**壊れた symlink は `existsSync` を単体では通る** —— それが CI を壊していた状態そのもの。
+⚠️ **symlink をコミットに戻さないこと**（`.gitignore` に理由付きで書いてある）。
+⚠️ ローカルは `master` / ミラーは `main` と**ブランチ名が違う**ので、Kit 側に
+`remote.github.push = refs/heads/master:refs/heads/main` を固定してある。押し間違え防止。
+📌 **検証**: 隣に Kit が無い場所へ fresh clone → `bun install` → `bun run build` を通し、
+出力の内容ハッシュが開発機と**一致**することまで確認した（ミラーの中身が同一である証拠）。
+⏸ **借金**: Kit は `node_modules/` を 26M コミットしており、ミラーにもそのまま出ている。
 
 ⚠️ **CI が緑でも「使える」証明にはならない。** Windows は Linux と同じ自前 CSD に乗るので、
 macOS の `1d89a15`（描画は完全なのに全操作が無反応）と同じ事故が起こりうる。**実機の手が要る。**
