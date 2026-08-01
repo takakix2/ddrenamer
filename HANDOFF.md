@@ -4,9 +4,11 @@
 > `~/dev/agent-guidelines/logs/*-ddrenamer.md` にある。
 
 最終更新: 2026-08-01（m4air で実機確認 + 署名/notarize を完了 ＝ **macOS 版は配れる**。
-その後 blackcube で **入力欄の `Ctrl+Z` を解決** ＝ **OS 間の非対称が消えた**）
+その後 blackcube で **入力欄の `Ctrl+Z` を解決** ＋ **Linux release でも操作確認**
+＝ **両 OS とも release で通り、OS 間の非対称も消えた**）
 直近の変更: **入力欄の `Ctrl+Z` / `Ctrl+Shift+Z` が Linux でも効くようになった**（下の解決済みセクション）。
 **自前 undo スタックは書いていない** —— `document.execCommand('undo')` を繋いだだけ。
+Linux を焼き直して release で実測済み（⚠️ **`~/.local/bin` の旧版も差し替えた**）。
 その前（同日）: **macOS 実機で全項目が通った**（下の「macOS 実機確認」）。
 ⚠️ **前提が 1 つ崩れた** —— 「メニューが無いから `⌘C`/`⌘V` が効かないはず」は**誤り**で、
 **Tauri v2 が macOS にだけ既定メニューを勝手に付けている**（`lib.rs` にコードは無い）。
@@ -72,9 +74,8 @@ Edit ロール一式が既定で入っており、WKWebView が undo manager を
 **macOS 側は片付いた**（上）。手は Linux に戻る。優先度順:
 
 0. ✅ **入力欄の `Ctrl+Z`** —— **2026-08-01 に解決**（`execCommand` が効いた・下の専用セクション）
-1. ⏸ **Linux release ビルドでの動作確認**（macOS は release で通ったが Linux は未了）。
-   📌 **入力欄 undo の確認も release でやり直すこと** —— 今回の実測は dev ビルド。
-   このリポは「release では console が端末に届かない」等、**dev と release で違う面**を既に踏んでいる
+1. ✅ **Linux release ビルドでの動作確認** —— **2026-08-01 に完了**（下の「リリース成果物」）。
+   ⇒ **両 OS とも release で操作確認済み**になった。残る未検証は Windows だけ
 
 **番人の置き場は決まった**（2026-07-31）。`join_name_ext` が `Result` を返すようになり、
 stem と ext が出会う 1 点で空名を弾く。**次はそこに Windows の検査を足すだけ**:
@@ -295,7 +296,7 @@ blackcube の cursor theme が `whiteglass`（古い X11 名のみ）で `nwse-r
 
 | プラットフォーム | 焼いた場所 | 成果物 |
 |---|---|---|
-| Linux x86_64 | blackcube | ✅ **2026-07-31 10:1x に焼き直し済み**（番人の修正 + Undo 入り）: `deb 11M` / `rpm 11M` / `AppImage 83M`。**`~/.local/bin/ddrenamer` も差し替え済み**（旧版は `1e5ee7f` 相当） |
+| Linux x86_64 | blackcube | ✅ **2026-08-01 09:4x に焼き直し + release で操作確認済み**（入力欄 undo 入り・`b37a832`）: `deb 10.3M` / `rpm 10.3M` / `AppImage 82.2M`。**`~/.local/bin/ddrenamer` も差し替え済み**（⚠️ 差し替え前は **7-31 の旧版のまま**だった＝リポを直しても手元の道具には届いていなかった） |
 | macOS **universal** | **m4air** | ✅ **2026-08-01 に署名 + notarize 済み**: `DDRenamer.app 35M` / **`dmg 19M`**（`DDRenamer_0.1.0_universal.dmg`）。**x86_64 + arm64**。`spctl` が **accepted / Notarized Developer ID**。⇒ **配れる** |
 | ~~macOS aarch64~~ | m4air | ⚠️ 2026-07-31 の `71408fc` 版（adhoc 署名・arm64 のみ）。**実機の操作確認はこれで行った**が、配布物としては上の universal 版が正。`target/release/bundle/` の方は**旧物なので破棄してよい** |
 | Windows | — | ❌ **一度も焼いていない**（下の専用セクション） |
@@ -648,7 +649,35 @@ WKWebView の undo manager で**既に効いている**ので、繋ぐと**二�
 end-to-end で確認済み: 貼り付けで `a.txt` → `photo_final.txt`、欄の外で `Ctrl+Z` → `a.txt` に復帰し
 **md5 一致**（中身も無傷）。
 
-⏸ **dev ビルドでしか測っていない。** Linux release の動作確認と一緒にやり直すこと。
+✅ **release でも測り直した**（2026-08-01・下記）。dev と同じ挙動。
+
+### ✅ Linux release での再確認（2026-08-01）
+
+**成果物が現行 HEAD かを先に固定した。** フロントだけの変更なので、確かめる印は
+**Vite の内容ハッシュ**で足りる（Rust は無変更なのでシンボルの印は要らない）:
+
+```
+dist:      index-CdnfehbV.js / index-BNc9HppS.css
+バイナリ:  assets/index-CdnfehbV.js / assets/index-BNc9HppS.css   ← 一致
+旧 index-BJXgqN6K の残り: 0 件                                    ← 陰性側も見た
+```
+
+📌 **CSS のハッシュが前回と同じ**（`index-BNc9HppS.css`）なのは正しい —— CSS は触っていない。
+**片方だけ変わる**のが期待どおりの絵で、両方変わったら余計な物が入っている。
+
+**実測（release バイナリを起動して操作）**:
+
+- ✅ 入力欄の undo: `"photo_rel"` → `"photo"`、別の回で `"photoxxyy"` → `"photoxx"`
+- ✅ redo: `""` → `"photo"`、`"photoxx"` → `"photoxxyy"`
+- ⚠️ **redo が戻らない回を 1 度観測した**（undo の直後に押したのに何も起きなかった）。
+  再現条件を詰め切れていない。**undo は毎回効いたので実害は小さい**が、
+  「redo は必ず往復する」とは書けない。WebKit の undo スタックの都合でこちらから制御できない。
+- ✅ アプリの Undo（end-to-end）: 貼り付けで `a.txt` → `released.txt` → `Ctrl+Z` → `a.txt`、
+  **md5 一致**。戻した後は ↶ が薄く disabled に戻る（戻した行を履歴に積み直していない）。
+
+🚨 **`~/.local/bin/ddrenamer` は 7-31 の旧版のまま座っていた**（`index-BJXgqN6K.js` が焼かれていた）。
+リポとリリースを直しても**手元で実際に起動する道具には届いていない**。差し替え済み。
+⇒ 焼いたら **インストール先のハッシュも見る**こと（[[repo-is-not-what-users-get]]）。
 
 ### 🚨 測るときに踏んだ穴 2 つ
 
@@ -794,11 +823,9 @@ ZFS スナップショットや git を持っている使い手は、もっと�
 
 ## Follow-Ups
 
-- 🔶 **配布判断。** ✅ 焼き直しも実機確認も済んだ（macOS は 2026-08-01 の release ビルドで
-  操作まで確認）。残るのは**署名だけ**で、adhoc のままでは配れない（次項）。
-  ✅ **Linux は 2026-07-31 08:32–08:35 に焼き直し済み**（番人の修正入り・`1bc40dd`）。
-  ⏸ **Linux 側は release ビルドでの動作確認をしていない**（ユニットテストと配線の検証まで）。
-  📌 macOS は release で通ったので、残る未確認は Linux release だけ。
+- 🔶 **配布判断。** ✅ **両 OS とも release ビルドで操作確認まで済んだ**
+  （macOS: 2026-08-01・m4air / Linux: 2026-08-01 09:4x・blackcube）。macOS は署名 + notarize も通り
+  **配れる**。⇒ **残るのはコードではなく LICENSE と配布先**（下記）。
 - 🔶 **投げる前に止める（要検討・2026-07-31 に提起）。** 空名の番人は Rust 側に立ったが、
   UI は**ドロップを受け付けてから 1 件ずつ拒否する**（5 個投げると `Name is empty` が 5 行並ぶ）。
   投げる前に分かる形（名前が空ならドロップゾーンを非活性 / 縁を警告色に）の方が親切ではあるが、
@@ -813,7 +840,7 @@ ZFS スナップショットや git を持っている使い手は、もっと�
   別経路で着く）。⚠️ **塞ぐと `.gitignore` のような正当な dotfile 作成も巻き込む**ので、
   「元が dotfile でないのに結果が `.` で始まる」を検出する形が要る。2026-07-31 に**意図的に保留**。
 - ✅ **入力欄の `Ctrl+Z` / `Ctrl+Shift+Z`** —— **2026-08-01 に解決**（専用セクションへ）。
-  残った一点は「**dev でしか測っていない**」ことだけで、Linux release の確認と一緒に片付ける。
+  dev / release の両方で確認済み。⚠️ **redo だけは「必ず往復する」と書けない**（1 度戻らない回を観測）。
 
 - 🔶 **Kit の `--layer-1` が宙ぶらりん**（`_settings.css` が参照するのに定義が無い）。
   DDRenamer は `_settings.css` を避けて回避したが、**Lethe Client 側は透明な背景で出ているはず**。
