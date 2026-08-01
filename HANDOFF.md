@@ -83,8 +83,11 @@ Edit ロール一式が既定で入っており、WKWebView が undo manager を
 ⇒ ✅ **空の名前 + 拡張子維持 で隠しファイルが作れる**（修正済・下に専用セクション）
 ⇒ ✅ **大小だけ違うファイルを黙って上書き**（修正済・下に専用セクション）
 
-**次に手が空いているのは Windows を実際に焼くところ**（機械が無い・CI も無い。下の専用セクション）。
-コードを書かずに済む残りは **LICENSE の決定**と**配布先**。
+3. ✅ **LICENSE** —— **2026-08-01 に MIT で決定**（下に専用セクション）。第三者通知も**配布物に載せた**。
+
+**残るのは 2 つだけ**:
+- 🪟 **Windows を実際に焼く**（機械が無い・CI も無い。下の専用セクション）
+- 🔶 **配布先の決定**（GitHub Releases が自然か。macOS の dmg は署名 + notarize 済みで配れる状態）
 
 ---
 
@@ -732,6 +735,53 @@ HANDOFF は当初「`join_name_ext` の中に足せば stem 系 6 経路に一�
 関数の契約 / `/` でファイルが逃げないこと / **join を迂回する 2 モードも捕まえること**。
 📌 **ガードを外すと後ろ 2 本が落ちることを確認済み**（当たっているテストである証拠）。
 関数の契約テストだけは直呼びなので落ちないのが正しい。
+
+## ✅ 決定: ライセンスは MIT（2026-08-01）
+
+**`LICENSE` = MIT / `Copyright (c) 2026 Takayuki Nine`。**
+README の `MIT License (or Unlicense)` は**削除した** —— 2 つ併記したまま配ると、
+受け取った側がどちらの条件で使えるのか判断できない。
+
+📌 **名義は macOS の署名（`Developer ID Application: Takayuki Nine`）と揃えてある。**
+同じ配布物の中で名義が 2 つあると「同一人物か？」という余計な問いを生むため。
+
+### 🚨 MIT だけでは足りない —— 同梱フォントが OFL-1.1
+
+`noto-sans-jp` / `jetbrains-mono` は **OFL-1.1** で、しかも**バイナリに焼き込んでいる**
+（2026-07-30 の同梱判断）。**アプリを配る ＝ フォントを配る**なので、OFL の要求により
+**ライセンス表記がバイナリと一緒に旅する必要がある**。
+
+⇒ `THIRD-PARTY-NOTICES.md`（OFL 全文 + 依存の一覧）を置き、
+**`tauri.conf.json` の `bundle.resources` で配布物に載せた**。
+
+```json
+"resources": { "../LICENSE": "LICENSE",
+               "../THIRD-PARTY-NOTICES.md": "THIRD-PARTY-NOTICES.md" }
+```
+
+🚨 **リポに置くだけでは未達だった。** 宣言する前の deb を `dpkg-deb -c` で見ると
+**ライセンスファイルが 1 つも入っていない**。Tauri の bundle は**宣言した物しか入れない**ので、
+「リポに LICENSE を置いた」は OFL の要求を満たさない。
+⇒ [[repo-is-not-what-users-get]]（同じ日に `~/.local/bin` の方でも踏んだ）。
+
+**確認済み**: `deb` と `AppImage` の両方に `usr/lib/DDRenamer/LICENSE` と
+`THIRD-PARTY-NOTICES.md` が入っていること。
+⏸ **`rpm` は未確認**（このマシンに `rpm` / `rpm2cpio` が無い）。同じ `resources` 設定なので
+入っている見込みだが、**見ていないものは見ていない**。
+⏸ **macOS の `.app` / `dmg` も未確認**（次に焼くときに `Contents/Resources/` を見ること）。
+
+### 依存のライセンス（機械で数えた・`cargo metadata`）
+
+**463 クレート全部が申告済み・GPL はゼロ。** 大半が `Apache-2.0 OR MIT`（258）と `MIT`（116）。
+
+⚠️ **MPL-2.0 が 5 件**（`cssparser` / `cssparser-macros` / `dtoa-short` / `option-ext` /
+`selectors`）。**無改変の依存**なので DDRenamer 自身のライセンスには影響しないが、
+ファイル単位の弱いコピーレフトなので**入手先を通知に明記**してある。
+
+📌 **通知は手書きせず `cargo metadata` + `package.json` から生成した**（`cargo-about` は未インストール）。
+⚠️ **依存を変えたら生成し直すこと** —— 腐った通知ファイルは、無いより悪い（点検済みに見えるので）。
+📌 生成時に `MIT/Apache-2.0` と `MIT OR Apache-2.0` を**同じ行に畳んでいる**。
+畳まないと同じ許諾が 2 行に割れて、集計が雑に見える。
 
 ## 🪟 未着手: Windows 対応（**一度も焼いていない**）
 

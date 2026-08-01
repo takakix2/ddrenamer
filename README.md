@@ -76,10 +76,23 @@ bun run tauri build
 生成されたバイナリ (`src-tauri/target/release/bundle/`) を使用してください。
 
 ## ⚠️ Known Issues / Notes
-- **Wayland (Linux)**: デスクトップ環境の制約により、ファイルマネージャーからのドラッグ＆ドロップが動作しない場合があります。`Ctrl+V` ペーストは全環境で動作します。
+- **入力欄の `Ctrl+Z`**: Linux では WebKitGTK にキーバインドが無いため、アプリ側で
+  editing command に繋いでいます。**戻す粒度は WebKit が決める**ので、一気に打った名前は
+  一度で全部消えることがあります（`Ctrl+Shift+Z` で戻せます）。
+- **置けない名前**: 移植性のため、**どの OS でも Windows の規則で弾きます**
+  （`< > : " / \ | ? *`・予約名 `CON` 等・末尾のドット/空白）。Linux では合法な `a:b.txt` も作れません。
+
+> 📌 以前ここには「Wayland では D&D が動作しない場合がある」と書いてありましたが、
+> **2026-07-30 に GNOME Wayland ネイティブで実機確認したところ D&D も `Ctrl+V` も動きます。**
+> 一度も測られないまま運ばれていた記述でした。
 
 ## 📜 ライセンス
-MIT License (or Unlicense) - This is a personal project.
+
+**MIT License** — 全文は [`LICENSE`](LICENSE)。
+
+⚠️ 配布物には**同梱フォント (SIL Open Font License 1.1)** をはじめとする第三者コンポーネントが
+含まれます。それらの表記は [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) に集約しており、
+**バイナリを配るときは一緒に配る必要があります**（OFL の要求）。
 
 ## 🌱 着想について
 
