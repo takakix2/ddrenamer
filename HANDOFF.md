@@ -795,7 +795,37 @@ README の `MIT License (or Unlicense)` は**削除した** —— 2 つ併記�
 📌 生成時に `MIT/Apache-2.0` と `MIT OR Apache-2.0` を**同じ行に畳んでいる**。
 畳まないと同じ許諾が 2 行に割れて、集計が雑に見える。
 
-## 🪟 未着手: Windows 対応（**一度も焼いていない**）
+## 🪟 Windows: CI を置いた（2026-08-01）— **初回で 1 件見つけた**
+
+LAN に Windows 機が無いので **GitHub Actions (`windows-latest`)** に置いた
+（`.github/workflows/windows.yml`）。Gitea には runner が居ないので CI は GitHub 側にしか置けない。
+狙いは installer より **テストを実 Windows のファイルシステムで走らせること**。
+
+### 初回の結果: **21 通過 / 1 失敗** —— 失敗はガードではなくテストの前提だった
+
+```
+case_only_rename_does_not_destroy_a_distinct_file ... FAILED
+  expected a refusal, got "Success"
+```
+
+このテストは `photo.txt`(VICTIM) と `PHOTO.txt`(SUBJECT) を**同じディレクトリに並べて**、
+別ファイルを壊さないことを見る。だが **case-insensitive な FS では 2 つを同時に作れない** ——
+2 回目の `write` は同じファイルを上書きするだけ。⇒ **シナリオ自体が構築できず**、
+残った 1 個への case-only リネームは**正しく `Success`** になる。**ガードは正しい。**
+
+🚨 **このテストは macOS でも同じ理由で落ちる**（macOS も既定で case-insensitive）。
+**ext4 でしか走らせていなかったので今まで露見しなかった** —— m4air で `cargo test` を
+走らせていれば同じ失敗が出ていたはず。
+
+**直し方**: `cfg(windows)` で分岐**しない**。macOS は Unix かつ case-insensitive、
+Linux も case-insensitive でマウントできるので、**ターゲット三つ組では答えが出ない**。
+`filesystem_is_case_sensitive()` で**目の前の FS に訊いて**、作れない環境では理由付きで skip する。
+📌 ext4 では skip されずに実際に走ることを確認済み（skip が常時発動して緑になる罠の陰性対照）。
+
+⚠️ **CI が緑でも「使える」証明にはならない。** Windows は Linux と同じ自前 CSD に乗るので、
+macOS の `1d89a15`（描画は完全なのに全操作が無反応）と同じ事故が起こりうる。**実機の手が要る。**
+
+## 🪟 未着手: Windows の実機確認（**焼けても触っていない**）
 
 「マルチ OS で作っていた」つもりだが、**Windows のビルドは一度も走っていない**。
 

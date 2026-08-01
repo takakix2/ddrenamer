@@ -566,13 +566,41 @@ mod tests {
 
     // --- Guards: the two bugs filed on 2026-07-30 ---
 
+    /// Does the filesystem under `dir` tell `a` and `A` apart?
+    ///
+    /// Deliberately not a `cfg(windows)` question. macOS is Unix and
+    /// case-insensitive by default, and Linux can mount case-insensitive
+    /// volumes, so the target triple does not answer it -- ask the filesystem
+    /// that is actually in front of the test.
+    fn filesystem_is_case_sensitive(dir: &Path) -> bool {
+        let lower = dir.join("caseprobe.tmp");
+        File::create(&lower).unwrap();
+        let sensitive = !dir.join("CASEPROBE.TMP").exists();
+        let _ = std::fs::remove_file(&lower);
+        sensitive
+    }
+
     /// A rename that only changes case must not be mistaken for a rename onto
     /// a distinct file. The old guard compared lowercased names, so on a
     /// case-sensitive filesystem it let `PHOTO.txt` overwrite an unrelated
     /// `photo.txt` and reported success.
+    ///
+    /// ⚠️ This scenario only exists where the filesystem is case-sensitive.
+    /// Elsewhere the two names are one file, so there is no distinct victim to
+    /// destroy and the rename is correctly allowed -- which is what
+    /// `case_only_rename_of_the_same_file_succeeds` covers. Windows CI found
+    /// this on 2026-08-01; the test had only ever run on ext4, and it would
+    /// have failed on macOS for the same reason had anyone run it there.
     #[test]
     fn case_only_rename_does_not_destroy_a_distinct_file() {
         let dir = tempdir().unwrap();
+        if !filesystem_is_case_sensitive(dir.path()) {
+            eprintln!(
+                "skipped: this filesystem is case-insensitive, so two files \
+                 differing only in case cannot both exist"
+            );
+            return;
+        }
         let victim = dir.path().join("photo.txt");
         let subject = dir.path().join("PHOTO.txt");
         std::fs::write(&victim, b"VICTIM").unwrap();
