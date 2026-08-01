@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "lint": "eslint .",
-    "check:locales": "bun scripts/check-locales.ts"
+    "check:locales": "bun scripts/check-locales.ts",
+    "setup:ui-kit": "bun scripts/setup-ui-kit.ts",
+    "postinstall": "bun scripts/setup-ui-kit.ts"
   },
   "dependencies": {
     "@fontsource-variable/jetbrains-mono": "^5.3.0",

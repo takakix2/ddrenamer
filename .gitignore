@@ -38,3 +38,9 @@ src-tauri/binaries
 # （32x32.png が見つからない）。blackcube にはローカルに在ったので長く気づけなかった。
 !src-tauri/icons/**/*.png
 !src-tauri/icons/*.png
+
+# 共有デザインシステム。リポの外に在るので追跡しない。
+# `bun install`（postinstall）が用意する:
+#   隣に Lethe_UI_Kit が在れば symlink、無ければ public ミラーから clone。
+# 🚨 symlink をコミットに戻さないこと —— fresh clone / CI が壊れる。
+/src/ui-kit
