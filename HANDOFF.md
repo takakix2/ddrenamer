@@ -355,7 +355,7 @@ export PATH="$HOME/.bun/bin:$PATH"     # bun は PATH に無い。node/npm は�
 cd ~/dev/DDRenamer && git pull
 
 export APPLE_SIGNING_IDENTITY="Developer ID Application: Takayuki Nine (K8K944Y32N)"
-export APPLE_ID="<apple-id>"
+export APPLE_ID="<apple-id>"                # 🚨 実値を書き戻さないこと（下記）
 export APPLE_TEAM_ID="K8K944Y32N"
 export APPLE_PASSWORD="$(security find-generic-password -s 'TABULA NOTARIZE' -w)"   # 🚨 下記
 bun run tauri build --target universal-apple-darwin
@@ -371,6 +371,18 @@ xcrun stapler staple "$DMG"
 spctl -a -vv -t open --context context:primary-signature "$DMG"   # → accepted / Notarized Developer ID
 xcrun stapler validate "$DMG"                                     # → オフラインでも通る証拠
 ```
+
+🚨 **`APPLE_ID` に実アドレスを書き戻さないこと。このリポは GitHub 側が public。**
+2026-08-01 に一度書かれており、**push 前に履歴ごと `<apple-id>` へ置換した**
+（後から修正コミットを足すだけでは、古い commit の blob が公開されて意味がない）。
+値は m4air のローカルにだけ置く。⚠️ Team ID (`K8K944Y32N`) は**秘密ではない**
+（署名済みバイナリすべてに入っている）ので、こちらは書いてよい。
+
+📌 **コミットの author も揃えること。** m4air の git config は実アドレスを使っていて、
+blackcube は綴り違い (`n.takkai@`) を使っている。**公開リポでは
+`1370181+takakix2@users.noreply.github.com` に揃える**（本文を伏せても
+コミットのメタデータから漏れるため）。両機の `git config user.email` を直しておかないと、
+**次の push でまた同じことが起きる**。
 
 🚨 **`APPLE_PASSWORD="@keychain:TABULA NOTARIZE"` と書いてはいけない。**
 `notarytool` が解決に失敗し、**認証情報が正しいのに `HTTP 401 Invalid credentials`** で落ちる
