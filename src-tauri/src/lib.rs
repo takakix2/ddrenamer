@@ -101,6 +101,54 @@ fn to_hankaku(s: &str) -> String {
         .collect()
 }
 
+/// Characters Windows refuses anywhere in a filename.
+///
+/// Checked on every platform, not only on Windows. Switching the rule per OS
+/// would let this tool mint names on Linux that cannot be opened on Windows,
+/// and the breakage would surface only after the file crossed a machine --
+/// far away from the rename that caused it. The cost is that `a:b.txt` can no
+/// longer be produced here; that was accepted deliberately.
+///
+/// `/` earns its place on Linux too: the new name is handed to
+/// `parent.join(&new_name)`, so a slash would quietly move the file into
+/// another directory instead of renaming it in place.
+const FORBIDDEN_CHARS: [char; 9] = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+
+/// Device names Windows still reserves, with or without an extension:
+/// `CON.txt` is `CON`. Compared case-insensitively.
+const RESERVED_DEVICE_NAMES: [&str; 22] = [
+    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+];
+
+/// Refuse names that some supported platform cannot store.
+///
+/// This runs on the *finished* name rather than inside `join_name_ext`,
+/// because the join is not the only seam: `Fixed` with "keep extension" off
+/// returns the name directly, and `Replace` rewrites the whole name without
+/// ever splitting off a stem. Both would walk past a guard placed in the join.
+fn check_portable_name(name: &str) -> Result<(), String> {
+    if let Some(c) = name.chars().find(|c| FORBIDDEN_CHARS.contains(c)) {
+        return Err(format!("Invalid character '{}'", c));
+    }
+    if name.chars().any(char::is_control) {
+        return Err("Control character in name".into());
+    }
+    // Windows silently strips these, so a file written as "photo." opens as
+    // "photo" -- two names for one file is worse than refusing.
+    if name.ends_with('.') || name.ends_with(' ') {
+        return Err("Name ends with a dot or space".into());
+    }
+    let device = name.split('.').next().unwrap_or(name);
+    if RESERVED_DEVICE_NAMES
+        .iter()
+        .any(|r| r.eq_ignore_ascii_case(device))
+    {
+        return Err(format!("Reserved name '{}'", device));
+    }
+    Ok(())
+}
+
 /// Reconstruct a filename from a stem and an extension.
 ///
 /// The one point where a stem and an extension meet.
@@ -310,6 +358,17 @@ fn handle_rename(path: String, cmd: RenameCommand) -> RenameResult {
                 return RenameResult {
                     path,
                     status: "Resulting name is empty".into(),
+                    new_name: None,
+                    new_path: None,
+                };
+            }
+
+            // Every mode lands here, so this is the seam that holds for all of
+            // them -- including the two that skip `join_name_ext`.
+            if let Err(status) = check_portable_name(&new_name) {
+                return RenameResult {
+                    path,
+                    status,
                     new_name: None,
                     new_path: None,
                 };
@@ -584,6 +643,95 @@ mod tests {
         assert_eq!(res.status, "Name is empty");
         assert!(file_path.exists(), "the original must be left alone");
         assert!(!dir.path().join(".jpg").exists(), "a hidden file was created");
+    }
+
+    /// The rule is the same on every platform on purpose: a name minted on
+    /// Linux has to be openable on Windows, and the failure would otherwise
+    /// only show up on the other machine.
+    #[test]
+    fn names_windows_cannot_store_are_refused() {
+        for bad in ["a:b", "a<b", "a>b", "a\"b", "a|b", "a?b", "a*b", "a\\b"] {
+            assert!(
+                check_portable_name(bad).is_err(),
+                "{bad:?} should be refused"
+            );
+        }
+        for reserved in ["CON", "con.txt", "NUL", "com1.tar.gz", "LPT9.jpg"] {
+            let err = check_portable_name(reserved).unwrap_err();
+            assert!(err.starts_with("Reserved name"), "{reserved:?} -> {err}");
+        }
+        assert_eq!(
+            check_portable_name("photo."),
+            Err("Name ends with a dot or space".into())
+        );
+        assert_eq!(
+            check_portable_name("photo "),
+            Err("Name ends with a dot or space".into())
+        );
+        assert!(check_portable_name("a\u{7}b").is_err(), "control char");
+
+        // Positive control: the ordinary cases must still pass, or the test
+        // above would also pass with a guard that refuses everything.
+        for good in ["photo.jpg", ".gitignore", "photo.tar.gz", "CONSOLE.txt", "日本語.txt"] {
+            assert_eq!(check_portable_name(good), Ok(()), "{good:?} must pass");
+        }
+    }
+
+    /// A slash is not just a Windows concern: the finished name is handed to
+    /// `parent.join()`, so without the guard this renames the file into
+    /// another directory -- and reports success.
+    #[test]
+    fn a_slash_cannot_move_the_file_out_of_its_directory() {
+        let dir = tempdir().unwrap();
+        let sub = dir.path().join("sub");
+        std::fs::create_dir(&sub).unwrap();
+        let file_path = dir.path().join("photo.jpg");
+        std::fs::write(&file_path, b"PAYLOAD").unwrap();
+
+        let cmd = RenameCommand::Fixed {
+            name: "sub/moved".into(),
+            keep_ext: true,
+        };
+        let res = handle_rename(file_path.to_str().unwrap().into(), cmd);
+
+        assert_eq!(res.status, "Invalid character '/'");
+        assert!(file_path.exists(), "the original must stay put");
+        assert!(
+            !sub.join("moved.jpg").exists(),
+            "the file escaped into a subdirectory"
+        );
+    }
+
+    /// `Fixed` with "keep extension" off returns the name without going
+    /// through `join_name_ext`, so a guard living in the join would miss it.
+    /// This is why the check sits on the finished name instead.
+    #[test]
+    fn the_guard_covers_the_modes_that_skip_the_join() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("photo.jpg");
+        File::create(&file_path).unwrap();
+
+        let res = handle_rename(
+            file_path.to_str().unwrap().into(),
+            RenameCommand::Fixed {
+                name: "bad:name".into(),
+                keep_ext: false,
+            },
+        );
+        assert_eq!(res.status, "Invalid character ':'");
+        assert!(file_path.exists());
+
+        // `Replace` rewrites the whole name and never splits off a stem.
+        let res = handle_rename(
+            file_path.to_str().unwrap().into(),
+            RenameCommand::Replace {
+                from: "photo".into(),
+                to: "CON".into(),
+                use_regex: false,
+            },
+        );
+        assert_eq!(res.status, "Reserved name 'CON'");
+        assert!(file_path.exists());
     }
 
     /// Whitespace is not a name either.
