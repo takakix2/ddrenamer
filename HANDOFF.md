@@ -294,7 +294,7 @@ blackcube の cursor theme が `whiteglass`（古い X11 名のみ）で `nwse-r
 | プラットフォーム | 焼いた場所 | 成果物 |
 |---|---|---|
 | Linux x86_64 | blackcube | ✅ **2026-08-01 09:4x に焼き直し + release で操作確認済み**（入力欄 undo 入り・`b37a832`）: `deb 10.3M` / `rpm 10.3M` / `AppImage 82.2M`。**`~/.local/bin/ddrenamer` も差し替え済み**（⚠️ 差し替え前は **7-31 の旧版のまま**だった＝リポを直しても手元の道具には届いていなかった） |
-| macOS **universal** | **m4air** | ✅ **2026-08-01 に署名 + notarize 済み**: `DDRenamer.app 35M` / **`dmg 19M`**（`DDRenamer_0.1.0_universal.dmg`）。**x86_64 + arm64**。`spctl` が **accepted / Notarized Developer ID**。⇒ **配れる** |
+| macOS **universal** | **m4air** | ⚠️ **署名 + notarize は済んでいるが、中身が古い**（2026-08-01 06:5x 焼き）。`spctl` は accepted / Notarized Developer ID だが、**同日午前の blackcube 分が入っていない** —— フロントが `index-BJXgqN6K.js`（入力欄 undo 前）で、`Reserved name` / `Invalid character` のリテラルが **0 件**（名前の検査前）。⇒ **配る前に焼き直し + 再署名 + 再 notarize が要る** |
 | ~~macOS aarch64~~ | m4air | ⚠️ 2026-07-31 の `71408fc` 版（adhoc 署名・arm64 のみ）。**実機の操作確認はこれで行った**が、配布物としては上の universal 版が正。`target/release/bundle/` の方は**旧物なので破棄してよい** |
 | Windows | — | ❌ **一度も焼いていない**（下の専用セクション） |
 
@@ -928,9 +928,14 @@ ZFS スナップショットや git を持っている使い手は、もっと�
 
 ## Follow-Ups
 
-- 🔶 **配布判断。** ✅ **両 OS とも release ビルドで操作確認まで済んだ**
-  （macOS: 2026-08-01・m4air / Linux: 2026-08-01 09:4x・blackcube）。macOS は署名 + notarize も通り
-  **配れる**。⇒ **残るのはコードではなく LICENSE と配布先**（下記）。
+- 🔶 **配布判断。** ✅ 両 OS とも release ビルドで操作確認まで済んだ
+  （macOS: 2026-08-01 早朝・m4air / Linux: 同日 09:4x・blackcube）。
+  🚨 **ただし macOS の成果物は古い。** 署名 + notarize が通っているのは **06:5x に焼いた版**で、
+  同日午前の blackcube 分（入力欄 undo / 名前の検査 / ライセンス同梱）が**入っていない**。
+  Linux は焼き直したが macOS は焼いていないので、**今 2 つの OS で中身が違う**。
+  ⇒ 配るなら **m4air で焼き直し → 再署名 → 再 notarize → staple** をやり直すこと。
+  📌 **これが今日 3 度目の「成果物 ≠ リポ」**（1: `~/.local/bin` の旧バイナリ、
+  2: bundle にライセンスが入っていなかった、3: これ）。[[repo-is-not-what-users-get]]
 - 🔶 **投げる前に止める（要検討・2026-07-31 に提起）。** 空名の番人は Rust 側に立ったが、
   UI は**ドロップを受け付けてから 1 件ずつ拒否する**（5 個投げると `Name is empty` が 5 行並ぶ）。
   投げる前に分かる形（名前が空ならドロップゾーンを非活性 / 縁を警告色に）の方が親切ではあるが、
