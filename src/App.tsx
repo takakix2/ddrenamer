@@ -449,6 +449,25 @@ function App() {
 
       // ignore if input is focused
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        // WebKitGTK は入力欄の `Ctrl+Z` / `Ctrl+Shift+Z` を既定では処理しない
+        // （`Ctrl+A` / `C` / `V` / `X` は効くのにこの 2 つだけ落ちる）。だが **editing command
+        // 経路には undo が在る**ので、そこへ繋ぐ。2026-08-01 に blackcube で実測:
+        // `"abcdef" -> "abc"` と**打鍵の塊単位**で戻り、redo も往復する。
+        // controlled input でも壊れない（`execCommand` が `input` を発火するので state が追従する。
+        // 再レンダーを起こしても値が巻き戻らないことを確認済み）。
+        //
+        // ⚠️ **macOS では触らない。** あちらは Tauri v2 が付ける既定メニュー（Edit ロール）＋
+        // WKWebView の undo manager で**既に効いている**（2026-08-01 m4air で実機確認）。
+        // 二重に undo する危険しかないので `!isMac` で閉じる。
+        //
+        // ⚠️ **`queryCommandEnabled('undo')` で判断しないこと。** 実行が成功する場面でも
+        // `false` を返すのを実測した（`exec=true` なのに `enabled=false`）。戻り値で判断する。
+        if (!isMac && modifier && e.key.toLowerCase() === 'z') {
+          // 失敗したときは preventDefault しない（既定の処理に道を残す）。
+          if (document.execCommand(e.shiftKey ? 'redo' : 'undo')) {
+            e.preventDefault();
+          }
+        }
         return;
       }
 

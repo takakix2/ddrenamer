@@ -3,8 +3,11 @@
 > このファイルは**現在の状態**を持つ。経緯（なぜそうなったか）は
 > `~/dev/agent-guidelines/logs/*-ddrenamer.md` にある。
 
-最終更新: 2026-08-01（**m4air で実機確認 + 署名/notarize を完了 ＝ macOS 版は配れる**）
-直近の変更: **macOS 実機で全項目が通った**（下の「macOS 実機確認」）。
+最終更新: 2026-08-01（m4air で実機確認 + 署名/notarize を完了 ＝ **macOS 版は配れる**。
+その後 blackcube で **入力欄の `Ctrl+Z` を解決** ＝ **OS 間の非対称が消えた**）
+直近の変更: **入力欄の `Ctrl+Z` / `Ctrl+Shift+Z` が Linux でも効くようになった**（下の解決済みセクション）。
+**自前 undo スタックは書いていない** —— `document.execCommand('undo')` を繋いだだけ。
+その前（同日）: **macOS 実機で全項目が通った**（下の「macOS 実機確認」）。
 ⚠️ **前提が 1 つ崩れた** —— 「メニューが無いから `⌘C`/`⌘V` が効かないはず」は**誤り**で、
 **Tauri v2 が macOS にだけ既定メニューを勝手に付けている**（`lib.rs` にコードは無い）。
 その前（2026-07-31）: **Undo を実装**（バッチ単位・`Ctrl+Z`・ログバーのボタン）＋
@@ -68,9 +71,10 @@ Edit ロール一式が既定で入っており、WKWebView が undo manager を
 
 **macOS 側は片付いた**（上）。手は Linux に戻る。優先度順:
 
-0. 💡 **入力欄の `Ctrl+Z`** —— `document.execCommand('undo')` を繋いで効くか試す（**10 分**）。
-   macOS で決着が付いたので、残る非対称はこれだけ（下の follow-up に詳細）
-1. ⏸ **Linux release ビルドでの動作確認**（macOS は release で通ったが Linux は未了）
+0. ✅ **入力欄の `Ctrl+Z`** —— **2026-08-01 に解決**（`execCommand` が効いた・下の専用セクション）
+1. ⏸ **Linux release ビルドでの動作確認**（macOS は release で通ったが Linux は未了）。
+   📌 **入力欄 undo の確認も release でやり直すこと** —— 今回の実測は dev ビルド。
+   このリポは「release では console が端末に届かない」等、**dev と release で違う面**を既に踏んでいる
 
 **番人の置き場は決まった**（2026-07-31）。`join_name_ext` が `Result` を返すようになり、
 stem と ext が出会う 1 点で空名を弾く。**次はそこに Windows の検査を足すだけ**:
@@ -600,6 +604,63 @@ if new_path.exists() {
 **回帰テスト 3 本**: 別ファイルを壊さない / 同一ファイルの case-only は通る /
 無関係な既存ファイルへの上書きは従来どおり拒否。
 
+## ✅ 解決: 入力欄の `Ctrl+Z` が Linux でも効く（2026-08-01）
+
+**`document.execCommand('undo')` を繋いだだけ。自前 undo スタックは書いていない。**
+`App.tsx` の keydown、**入力欄の early-return の中**（`Ctrl+V` と同じ土地）。
+
+```tsx
+if (!isMac && modifier && e.key.toLowerCase() === 'z') {
+  if (document.execCommand(e.shiftKey ? 'redo' : 'undo')) e.preventDefault();
+}
+```
+
+🚨 **「WebKitGTK は入力欄のテキスト undo を持っていない」は誤りだった**（2026-07-31 の結論）。
+正しくは **キーバインドが無いだけで、editing command 経路には undo が在る**。
+2026-07-31 の実測（uncontrolled 欄でも効かない）は事実だが、そこから
+「実体が無い」と読んだのが飛躍だった。⇒ **「キーが効かない」と「機能が無い」は別の主張**。
+
+**実測（blackcube・dev ビルド・DOM カナリアで読んだ）**:
+
+| 打鍵 | 結果 |
+|---|---|
+| `"abcdef"` で `Ctrl+Z` | `exec=true` / `"abcdef" -> "abc"`（**打鍵の塊単位**で戻る）|
+| 続けて `Ctrl+Shift+Z` | `exec=true` / `"" -> "abc"`（redo も往復する）|
+| undo 後に再レンダー（トグルを叩く）| 値が**巻き戻らない** ＝ React の state も追従している |
+
+📌 **controlled input でも壊れない。** `execCommand` が `input` イベントを発火するので
+`onChange` が拾って state が更新される。**2026-07-31 に controlled input を疑ったのは的外れ**
+だったが、結果的に「React は無関係」という結論だけは正しかった。
+
+⚠️ **`document.queryCommandEnabled('undo')` で分岐しないこと。** **実行が成功する場面でも
+`false` を返す**のを実測した（`exec=true` なのに `enabled=false`）。**戻り値で判断する**。
+📌 失敗時に `preventDefault()` しないのは、既定の処理に道を残すため。
+
+⚠️ **undo の粒度は WebKit が決める。こちらから制御できない。** 塊が割れるかどうかは安定せず、
+**一度も途中で止まらずに打った名前は `Ctrl+Z` 一発で全部消える**（実測: `"photo_final"` → `""`）。
+`Ctrl+Shift+Z` で戻せるので実害は小さいが、「1 文字ずつ戻る」と期待してはいけない。
+
+🚨 **macOS では `!isMac` で閉じてある。** あちらは Tauri v2 の既定メニュー（Edit ロール）＋
+WKWebView の undo manager で**既に効いている**ので、繋ぐと**二重に undo する**恐れしかない。
+⇒ これで **`Ctrl+A` / `C` / `V` / `X` / `Z` / `Shift+Z` が両 OS で揃った**（非対称は解消）。
+
+📌 **アプリの Undo（リネームを戻す）は無傷。** 変更したのは入力欄側の分岐だけ。
+end-to-end で確認済み: 貼り付けで `a.txt` → `photo_final.txt`、欄の外で `Ctrl+Z` → `a.txt` に復帰し
+**md5 一致**（中身も無傷）。
+
+⏸ **dev ビルドでしか測っていない。** Linux release の動作確認と一緒にやり直すこと。
+
+### 🚨 測るときに踏んだ穴 2 つ
+
+- **`console.log` は dev でも端末に届かない。** release だけの話だと思っていたが、
+  `bun run tauri dev` の出力にも 1 行も出ない。⇒ **DOM カナリアは dev でも要る**。
+  最初 `console.log` で測って「何も出ない」を見ており、**陽性対照が無ければ
+  「効かなかった」と誤診していた**（実際には検出器が黙っていただけ）。
+- 🚨 **HMR は古いリスナーを生かしたまま新しいリスナーを足す。** 計器付きの版と外した版が
+  同時に走り、`Ctrl+Z` 一回で **undo が二重に走った**（`"photo_final" -> "abc"` という
+  説明の付かない遷移が出る）。⇒ **`window.addEventListener` を張る変更を実機で測るときは、
+  HMR に頼らず dev プロセスごと入れ替える**こと。
+
 ## 🪟 未着手: Windows 対応（**一度も焼いていない**）
 
 「マルチ OS で作っていた」つもりだが、**Windows のビルドは一度も走っていない**。
@@ -751,42 +812,8 @@ ZFS スナップショットや git を持っている使い手は、もっと�
   `photo_a.jpg` に `photo_a` → `""` を当てると **`.jpg`** になる（`Fixed` で塞いだのと同じ結果に
   別経路で着く）。⚠️ **塞ぐと `.gitignore` のような正当な dotfile 作成も巻き込む**ので、
   「元が dotfile でないのに結果が `.` で始まる」を検出する形が要る。2026-07-31 に**意図的に保留**。
-- 🔶 **入力欄の `Ctrl+Z` / `Ctrl+Shift+Z` が効かない —— Linux だけ**
-  （2026-07-31 実測・**2026-08-01 に macOS で対照が取れた**）。
-  ⚠️ `lib.rs` にメニューのコードは無いが、**macOS だけは Tauri v2 が既定メニューを付ける**
-  （上の macOS 実機確認セクション）。⇒ **メニューの有無が OS で非対称**なのがこの差の土台。
-
-  | 操作 | Linux (WebKitGTK) | macOS (WKWebView) |
-  |---|---|---|
-  | `Ctrl/⌘ + A` 全選択 | ✅ | ✅ |
-  | `Ctrl/⌘ + C` コピー | ✅ | ✅ |
-  | `Ctrl/⌘ + V` 貼り付け | ✅ | ✅ |
-  | `Ctrl/⌘ + X` 切り取り | ✅ | ✅ |
-  | `Ctrl/⌘ + Z` 元に戻す | ❌ | **✅** |
-  | `Ctrl/⌘ + Shift + Z` やり直し | ❌ | （未測定） |
-
-  **原因は controlled input ではない**（当初そう疑ったが違った）。使い捨ての uncontrolled な欄を
-  隣に置いて同じ操作を並べたところ、**両方とも `Ctrl+Z` が効かず**、切り取りは**両方とも効いた**。
-  ⇒ **WebKitGTK が入力欄のテキスト undo を持っていない**、が結論。React は無関係。
-
-  🚨 **測り方の落とし穴**（一度誤報した）: `Ctrl+C` の直後に `Ctrl+X` を試すと、
-  **選択が外れて切り取りが空振りしてもクリップボードには直前の値が残る**ので、
-  「切り取りが効かない」と読めてしまう。**欄の中身を見て判定すること**
-  （空なら灰色のプレースホルダが出る ＝ 効いた印）。
-
-  **判断（2026-08-01・macOS の実測で決着）**:
-  - ✅ **macOS は何もしなくてよい。** 既定メニューの Edit ロール + WKWebView の undo manager で
-    既に効いている。**「メニューを足す作業」は不要になった**
-  - 🔴 **残るのは Linux だけ**。「WebKit 全般の話」ではなく **WebKitGTK 固有の欠落**と確定。
-    ⚠️ ただし「**GTK メニューを足せば直る**」も**まだ言えない** —— 2026-07-31 の実測は
-    uncontrolled な欄でも効かなかったので、undo の実体そのものが無い可能性が残る
-  - 💡 **自前スタックを書く前に試す安い道**（未検証・**blackcube で 10 分**）:
-    `Ctrl+Z` の keydown に **`document.execCommand('undo')`** を繋ぐだけ。
-    WebKit の editing command 経路なので、実体が在れば数行で終わる。
-    無ければそのとき初めて**欄ごとの自前 undo スタック**を検討する（実装量に見合うかは要判断）
-  - 📌 アプリの Undo（`Ctrl+Z` でリネームを戻す）とは**無関係**。あちらは入力欄では素通しする
-    ⇒ **macOS では両方が同居して正しく動くことを実機で確認済み**
-    （欄にフォーカスが在れば文字を戻し、外れていればリネームを戻す）
+- ✅ **入力欄の `Ctrl+Z` / `Ctrl+Shift+Z`** —— **2026-08-01 に解決**（専用セクションへ）。
+  残った一点は「**dev でしか測っていない**」ことだけで、Linux release の確認と一緒に片付ける。
 
 - 🔶 **Kit の `--layer-1` が宙ぶらりん**（`_settings.css` が参照するのに定義が無い）。
   DDRenamer は `_settings.css` を避けて回避したが、**Lethe Client 側は透明な背景で出ているはず**。
@@ -796,9 +823,8 @@ ZFS スナップショットや git を持っている使い手は、もっと�
   **自動フォーカス**され、`Ctrl+V` は「入力欄にフォーカスがあれば素通し」の早期 return に当たる。
   設計としては正しい（欄に貼れないと困る）が、**このタブだけ貼ってもリネームされない**のは
   説明が要る挙動。D&D は影響を受けない。今回の変更で入ったものではない。
-- 🔶 **macOS でリサイズハンドルを描かない判断が未検証。** `decorations: true` ＝ ネイティブの縁が
-  在るので不要という読みだが、`titleBarStyle: Overlay` との兼ね合いは m4air で見ていない。
-  **焼き直しのときに必ず縁を掴んで確かめる**こと。
+- ✅ **macOS でリサイズハンドルを描かない判断は正しかった**（2026-08-01・m4air で実測）。
+  `decorations: true` のネイティブの縁を掴んで `680x638` → `687x644`。`Overlay` とも喧嘩しない。
 - 🔶 **`.custom-select-container` / `-value` / `-icon` の 3 ルールが Kit に無い。**
   Kit は `components/tsx/CustomSelect.tsx` を配っているのに CSS を持たないので、
   **Tabula (`style.css:259`) / Alethoglyph (`App.css:678`) / DDRenamer (`App.css`) が
