@@ -1,6 +1,6 @@
 [package]
 name = "ddrenamer"
-version = "0.1.0"
+version = "0.6.0"
 description = "DDRenamer — Batch File Renaming Tool"
 authors = ["takaki2"]
 edition = "2021"
