@@ -965,4 +965,171 @@ mod tests {
             "内容は戻ったが名前の大小が戻っていない"
         );
     }
+
+    // --- Case と Convert: 到達できないモードの契約（2026-08-19） ---
+    //
+    // 🚨 This section exists because these two modes have no caller.
+    // `RenameCommand` has eight variants; the frontend sends six. `Case` and
+    // `Convert` are reachable only from here, and until today not even from
+    // here -- the `test_rename_*` block above covers exactly the six modes the
+    // UI has tabs for. The tests were written against the tabs, not against
+    // the enum, so the gap in the wiring left an identically shaped gap in the
+    // tests, and neither one pointed at the other.
+    //
+    // Nothing warns about this. Rust sees both variants matched in
+    // `handle_rename`, so `to_zenkaku` and `to_hankaku` count as used and
+    // dead_code stays quiet. TypeScript never sees the two it fails to send,
+    // because the seam between them is a JSON string tag. Both ends compile
+    // green across a join that neither compiler owns.
+    //
+    // These run before the tabs are wired, so the width conversion is executed
+    // here for the first time.
+
+    /// Case converts the stem and leaves the extension alone.
+    ///
+    /// That asymmetry is the contract, not an oversight: `IMG_001.JPG`
+    /// lowercased is `img_001.JPG`, because renaming is not the place to
+    /// decide that `.JPG` should become `.jpg` -- the extension tab is.
+    #[test]
+    fn case_lower_converts_the_stem_and_spares_the_extension() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("IMG_001.JPG");
+        File::create(&file_path).unwrap();
+
+        let cmd = RenameCommand::Case { mode: CaseMode::Lower };
+        let res = handle_rename(file_path.to_str().unwrap().into(), cmd);
+
+        assert_eq!(res.status, "Success");
+        assert_eq!(names_on_disk(dir.path()), vec!["img_001.JPG"]);
+    }
+
+    /// Widening touches the stem only, and the ASCII space becomes U+3000
+    /// rather than staying half-width -- a name that is half widened reads as
+    /// a bug, not as a choice.
+    #[test]
+    fn convert_to_zenkaku_widens_the_stem_only() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("photo 01.jpg");
+        File::create(&file_path).unwrap();
+
+        let cmd = RenameCommand::Convert { mode: WidthMode::Zenkaku };
+        let res = handle_rename(file_path.to_str().unwrap().into(), cmd);
+
+        assert_eq!(res.status, "Success");
+        assert_eq!(
+            names_on_disk(dir.path()),
+            vec!["\u{ff50}\u{ff48}\u{ff4f}\u{ff54}\u{ff4f}\u{3000}\u{ff10}\u{ff11}.jpg"],
+            "the extension must stay half-width"
+        );
+    }
+
+    /// The other direction, including U+3000 back to a plain space.
+    #[test]
+    fn convert_to_hankaku_narrows_the_stem_only() {
+        let dir = tempdir().unwrap();
+        let file_path = dir
+            .path()
+            .join("\u{ff30}\u{ff28}\u{ff2f}\u{ff34}\u{ff2f}\u{3000}\u{ff10}\u{ff11}.JPG");
+        File::create(&file_path).unwrap();
+
+        let cmd = RenameCommand::Convert { mode: WidthMode::Hankaku };
+        let res = handle_rename(file_path.to_str().unwrap().into(), cmd);
+
+        assert_eq!(res.status, "Success");
+        assert_eq!(names_on_disk(dir.path()), vec!["PHOTO 01.JPG"]);
+    }
+
+    /// Non-ASCII is left alone by both directions. Kana and kanji have no
+    /// half-width counterpart in this mapping, and silently mangling them
+    /// would be worse than doing nothing.
+    #[test]
+    fn width_conversion_leaves_japanese_text_untouched() {
+        assert_eq!(to_zenkaku("\u{5199}\u{771f}a"), "\u{5199}\u{771f}\u{ff41}");
+        assert_eq!(to_hankaku("\u{5199}\u{771f}\u{ff41}"), "\u{5199}\u{771f}a");
+    }
+
+    /// Every printable ASCII character survives a round trip.
+    ///
+    /// The two mappings are written as separate ranges (`'!'..='~'` one way,
+    /// U+FF01..=U+FF5E the other), so nothing in the code forces them to stay
+    /// each other's inverse. This is the assertion that does.
+    #[test]
+    fn width_conversion_round_trips_over_printable_ascii() {
+        let ascii: String = (0x20u8..=0x7e).map(|b| b as char).collect();
+        assert_eq!(to_hankaku(&to_zenkaku(&ascii)), ascii);
+    }
+
+    // 🚨 The three below are the reason this mode is not merely cosmetic.
+    // Narrowing is the one transform in this tool that can *invent* a
+    // character the user never typed: the full-width forms of `/`, `:` and the
+    // rest are perfectly legal in a filename, and their half-width twins are
+    // exactly what `check_portable_name` refuses. So the guard has to hold on
+    // a name nobody wrote by hand.
+
+    /// `\u{ff0f}` narrows to `/`, and `/` is not a character -- it is a
+    /// directory boundary. The new name is handed to `parent.join()`, so
+    /// letting this through would move the file instead of renaming it.
+    #[test]
+    fn hankaku_conversion_cannot_mint_a_path_separator() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("\u{ff41}\u{ff0f}\u{ff42}.jpg");
+        std::fs::write(&file_path, b"KEEP").unwrap();
+
+        let cmd = RenameCommand::Convert { mode: WidthMode::Hankaku };
+        let res = handle_rename(file_path.to_str().unwrap().into(), cmd);
+
+        assert_eq!(res.status, "Invalid character '/'");
+        assert!(res.new_name.is_none());
+        assert_eq!(
+            names_on_disk(dir.path()),
+            vec!["\u{ff41}\u{ff0f}\u{ff42}.jpg"],
+            "the file moved or was renamed despite the refusal"
+        );
+    }
+
+    /// `\u{ff23}\u{ff2f}\u{ff2e}.txt` is an ordinary name. `CON.txt` is a device.
+    #[test]
+    fn hankaku_conversion_cannot_mint_a_reserved_device_name() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("\u{ff23}\u{ff2f}\u{ff2e}.txt");
+        File::create(&file_path).unwrap();
+
+        let cmd = RenameCommand::Convert { mode: WidthMode::Hankaku };
+        let res = handle_rename(file_path.to_str().unwrap().into(), cmd);
+
+        assert_eq!(res.status, "Reserved name 'CON'");
+        assert_eq!(names_on_disk(dir.path()), vec!["\u{ff23}\u{ff2f}\u{ff2e}.txt"]);
+    }
+
+    /// U+3000 at the end of a name is fine on Windows; a trailing ASCII space
+    /// is silently stripped, which is how one file ends up with two names.
+    /// Narrowing turns the first into the second.
+    #[test]
+    fn hankaku_conversion_cannot_mint_a_trailing_space() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("photo\u{3000}");
+        File::create(&file_path).unwrap();
+
+        let cmd = RenameCommand::Convert { mode: WidthMode::Hankaku };
+        let res = handle_rename(file_path.to_str().unwrap().into(), cmd);
+
+        assert_eq!(res.status, "Name ends with a dot or space");
+        assert_eq!(names_on_disk(dir.path()), vec!["photo\u{3000}"]);
+    }
+
+    /// Widening never produces an empty stem, but it does produce a name that
+    /// no longer matches what the user dropped, so the identity guard still
+    /// has to see it as the same file when nothing changes.
+    #[test]
+    fn width_conversion_of_an_already_converted_name_is_a_no_op() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("\u{ff50}\u{ff48}\u{ff4f}\u{ff54}\u{ff4f}.jpg");
+        File::create(&file_path).unwrap();
+
+        let cmd = RenameCommand::Convert { mode: WidthMode::Zenkaku };
+        let res = handle_rename(file_path.to_str().unwrap().into(), cmd);
+
+        assert_eq!(res.status, "Success");
+        assert_eq!(names_on_disk(dir.path()), vec!["\u{ff50}\u{ff48}\u{ff4f}\u{ff54}\u{ff4f}.jpg"]);
+    }
 }
