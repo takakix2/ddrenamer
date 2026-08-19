@@ -4,7 +4,7 @@
 
 A batch file renamer built with Rust and Tauri. Pick a mode with a tab, drop files onto a large target, and the rename is done. **Nothing to navigate, room to aim, and fast** — and it can be undone.
 
-![DDRenamer Icon](public/tauri.svg)
+![DDRenamer](docs/screenshot-en.png)
 
 ## Download
 

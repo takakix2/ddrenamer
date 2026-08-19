@@ -4,7 +4,7 @@
 
 Rust と Tauri で作ったバッチリネームツールです。タブで機能を選び、大きなドロップゾーンに投げ込むだけでリネームが終わります。**迷わない、広い、速い** —— そして**取り消せる**。
 
-![DDRenamer Icon](public/tauri.svg)
+![DDRenamer](docs/screenshot-ja.png)
 
 ## ダウンロード
 
