@@ -317,6 +317,40 @@ blackcube の cursor theme が `whiteglass`（古い X11 名のみ）で `nwse-r
 
 ## リリース成果物
 
+### ✅ 2026-08-19: 5 形式すべてを `dbccdc3` から焼き、ライセンス同梱も確認した
+
+| OS | 成果物 | 署名 | ライセンス同梱 |
+|---|---|---|---|
+| 🐧 Linux | `deb` / `rpm` / `AppImage`(83M) | — | ✅ 3 形式とも |
+| 🪟 Windows | `msi`(8.9M) / `nsis setup.exe`(7.7M) / 素の `.exe`(16.5M) | 🔴 **無署名** | ✅ |
+| 🍎 macOS | `dmg`(19M) universal | ✅ **署名 + notarize + staple** | ✅ `.app` 内 |
+
+**確認の仕方**（成果物を開いて実体を見た。設定ファイルを読んだのではない）:
+`msiexec /a` で展開 / `.app` を `find` / `ar x`+`tar tf` / `7z` で rpm を 2 段展開 /
+**AppImage は `--appimage-extract` して焼き上がった実体を見た**（AppDir に在っても
+成果物に載るとは限らないので）。
+
+🚨 **`rpm` にライセンスが載っていなかったのは、5 分差だった。**
+rpm を焼いたのが 2026-08-01 10:36、同梱を入れたコミット `4bf5f2f` が同日 10:41:14。
+**設定が存在する 5 分前に焼かれていた。** 同日の deb / AppImage は後で焼き直されて
+確認されたが、rpm だけ取り残された。⇒ **「成果物 ≠ リポ」の 4 例目。**
+
+🚨 **由来はコミットで測る。文字列検索では測れない**（下の「成果物が現行 HEAD か」参照）。
+実際 2026-08-19 に、**dyna だけ `7a64385` のまま**で、最後の 2 コミットより前の
+Windows バンドルを配りかけた。差分は doc とコメントだけで動作は同一だが、
+**リリースノートにコミットを書く以上は揃える**ので焼き直した。
+📌 Windows では `core.autocrlf` のせいで `Cargo.toml` が「変更あり」に見える
+（`git diff --stat` に差分行が出ないので中身は同一）。**汚れの正体を見ずに焦らないこと。**
+
+🔴 **Windows は無署名。** SmartScreen が「Windows によって PC が保護されました」を出すので、
+配るなら**リリースノートに先回りで書く**こと。消すにはコード署名証明書（年 2〜4 万円 +
+HSM/トークン）が要る。小規模 OSS は無署名 + 注記が通例。
+
+⏸ **AppImage が 83M**（deb は 11M 前後）。WebKitGTK を丸ごと抱えるので妥当だが、
+配布ページで一言あると親切。
+
+
+
 | プラットフォーム | 焼いた場所 | 成果物 |
 |---|---|---|
 | Linux x86_64 | blackcube | ✅ **2026-08-01 09:4x に焼き直し + release で操作確認済み**（入力欄 undo 入り・`b37a832`）: `deb 10.3M` / `rpm 10.3M` / `AppImage 82.2M`。**`~/.local/bin/ddrenamer` も差し替え済み**（⚠️ 差し替え前は **7-31 の旧版のまま**だった＝リポを直しても手元の道具には届いていなかった） |
@@ -375,22 +409,40 @@ blackcube の cursor theme が `whiteglass`（古い X11 名のみ）で `nwse-r
 
 ### ✅ macOS 版を焼く手順（m4air・**署名 + notarize 込み**・2026-08-01 に確立）
 
+🚨 **`ssh` で入って走らせてはいけない。m4air の画面で開いた Terminal から走らせること。**
+この手順書は 2026-08-19 まで 1 行目が `ssh m4air` で始まっていたが、**そのとおりにやると
+必ず落ちる**。SSH セッションは console セッションではないので keychain の ACL 確認 UI を
+出せず、`codesign` が **`errSecInternalComponent`** で失敗する（署名 ID は
+`security find-identity` に 2 つとも有効に見えるので、証明書が壊れたように読める）。
+⚠️ **`errSecInternalComponent` を「証明書/鍵が壊れた」と読まないこと。**
+切り分けは `who` で付く —— 自分の tty が `(192.168.1.x)` 付きなら SSH。
+📌 どうしても SSH で通すなら、そのセッションで先に
+`security unlock-keychain -u ~/Library/Keychains/login.keychain-db`。ただし ACL 確認が
+出ると詰まるので、**画面側で 1 回通しておく方が確実**。
+⭐ **手順書は、うまくいった日の行動ではなく、書いた人が思い出した行動を記録する。**
+2026-08-01 の成功は画面側だったはずで、書き起こすとき「m4air で」が `ssh m4air` になった。
+
 ```bash
-ssh m4air
+# 🚨 ここは m4air の画面の Terminal.app（ssh ではない）
 export PATH="$HOME/.bun/bin:$PATH"     # bun は PATH に無い。node/npm は存在しない
 cd ~/dev/DDRenamer && git pull
 
 export APPLE_SIGNING_IDENTITY="Developer ID Application: Takayuki Nine (K8K944Y32N)"
-export APPLE_ID="<apple-id>"                # 🚨 実値を書き戻さないこと（下記）
+# 📌 実値を書かない。keychain 項目の `acct` に入っているので、そこから引く。
+# ⭐ 伏せ字を手で戻す運用をやめる —— 戻し忘れれば動かず、戻せば公開リポに実値が乗る。
+export APPLE_ID="$(security find-generic-password -s 'TABULA NOTARIZE' | sed -n 's/.*"acct"<blob>="\(.*\)"/\1/p')"
 export APPLE_TEAM_ID="K8K944Y32N"
 export APPLE_PASSWORD="$(security find-generic-password -s 'TABULA NOTARIZE' -w)"   # 🚨 下記
 bun run tauri build --target universal-apple-darwin
 
 # 🚨 tauri は .app しか notarize しない。dmg は署名するだけで「2 bundles 完成」と言う
 DMG=src-tauri/target/universal-apple-darwin/release/bundle/dmg/DDRenamer_0.1.0_universal.dmg
-xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" \
-  --password "$(security find-generic-password -s 'TABULA NOTARIZE' -w)" \
-  --team-id "$APPLE_TEAM_ID" --wait
+# 🚨 継続行 `\` のまま貼ると壊れる。ターミナルによっては `\` + 改行が `\ ` になり、
+# notarytool が `Error: 3 unexpected arguments: ' ', ' ', ' '` で落ちる（2026-08-19 に実測）。
+# 変数に入れてから **1 行で** 叩くこと。
+AID=$(security find-generic-password -s 'TABULA NOTARIZE' | sed -n 's/.*"acct"<blob>="\(.*\)"/\1/p')
+PW=$(security find-generic-password -s 'TABULA NOTARIZE' -w)
+xcrun notarytool submit "$DMG" --apple-id "$AID" --password "$PW" --team-id K8K944Y32N --wait
 xcrun stapler staple "$DMG"
 
 # 外から確かめる（exit code を信じない）
