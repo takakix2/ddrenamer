@@ -1,20 +1,25 @@
 # Prove the app builds for Windows -- and, more usefully, run the test suite
 # on a real Windows filesystem.
 #
-# There is no Windows machine on the LAN, so until one arrives this is the only
-# place the guards get exercised where they matter:
+# A Windows machine arrived on the LAN on 2026-08-19 (dyna), and the guards were
+# finally exercised by hand there. This is no longer the only place that
+# happens -- but it is the only place it happens on every push, from a clean
+# checkout, without anyone remembering to. That is the job it keeps:
 #
 #   - the overwrite guard asks same-file for identity because a case-insensitive
 #     filesystem reports the rename target as "already existing" when it IS the
-#     file being renamed. That path has only ever run on ext4, which is
-#     case-sensitive, so the branch it was written for is untested.
-#   - the portable-name guard refuses what Windows refuses. It has never run
-#     anywhere that actually refuses those names.
+#     file being renamed. ext4 is case-sensitive, so that branch does not run
+#     on the machine most of this was written on.
+#   - the portable-name guard refuses what Windows refuses, on every platform.
+#     Here is where it runs somewhere that would refuse those names anyway.
 #
 # What this does NOT prove: that the app is usable. macOS shipped a build whose
 # window drew perfectly and ignored every click, and a green pipeline would have
 # said nothing about it. Windows uses the same custom-decoration path as Linux,
-# so the shell still needs a pair of hands.
+# so the shell still needs a pair of hands -- and on 2026-08-19 it got them, on
+# dyna: the window drags, the buttons work, and a drop actually renames. That
+# hands-on pass found nothing, which is the outcome this file could not have
+# reported either way.
 name: Windows
 
 on:
