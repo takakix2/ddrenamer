@@ -10,8 +10,10 @@
 #     filesystem reports the rename target as "already existing" when it IS the
 #     file being renamed. ext4 is case-sensitive, so that branch does not run
 #     on the machine most of this was written on.
-#   - the portable-name guard refuses what Windows refuses, on every platform.
-#     Here is where it runs somewhere that would refuse those names anyway.
+#   - the portable-name guard applies Windows' rules on every platform. Note
+#     that it is deliberately stricter than this runner: CON.txt is an ordinary
+#     file on Windows 11, and the guard refuses it anyway, because older
+#     Windows and shares do not agree. Only the bare CON is still a device.
 #
 # What this does NOT prove: that the app is usable. macOS shipped a build whose
 # window drew perfectly and ignored every click, and a green pipeline would have

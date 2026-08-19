@@ -114,8 +114,25 @@ fn to_hankaku(s: &str) -> String {
 /// another directory instead of renaming it in place.
 const FORBIDDEN_CHARS: [char; 9] = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
 
-/// Device names Windows still reserves, with or without an extension:
-/// `CON.txt` is `CON`. Compared case-insensitively.
+/// Device names, refused with or without an extension. Compared
+/// case-insensitively.
+///
+/// The extension half of that is stricter than the Windows in front of us.
+/// Measured on Windows 11 build 26200 (2026-08-19): `CON.txt` is an ordinary
+/// file. Rust creates it, and `type` / `copy` / `del` all reach it. Only the
+/// bare name is still a device -- and there the hazard is real in a way worth
+/// naming: `fs::rename` will happily produce a file called `CON`, and nothing
+/// can open it afterwards, because `type CON` reads the console instead.
+///
+/// `CON.txt` is refused anyway. Older Windows resolved it to the device, and
+/// Microsoft still documents the form as one to avoid, so a file named that
+/// way is a file that stops opening once it crosses a machine or a share.
+/// The question this guard answers is not "will the OS in front of me accept
+/// this" but "will it still open where the file ends up".
+///
+/// The cost is paid by width conversion, which is the one mode that can reach
+/// this by accident: `ＣＯＮ.txt` narrows to `CON.txt` and is refused, so that
+/// name cannot be normalised here at all.
 const RESERVED_DEVICE_NAMES: [&str; 22] = [
     "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
     "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
