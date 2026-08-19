@@ -38,6 +38,12 @@ src-tauri/binaries
 # （32x32.png が見つからない）。blackcube にはローカルに在ったので長く気づけなかった。
 !src-tauri/icons/**/*.png
 !src-tauri/icons/*.png
+# 同じ理由で、README が貼る画面写真と favicon もソース。
+# 2026-08-19 に同じ罠を踏んだ —— docs/screenshot-*.png を README に貼ったのに
+# `*.png` に食われて追跡されず、**公開 README の画像が Not Found になっていた**。
+# ⭐ この規則が守るのは「作業中のスクショ」であって、「配る物」ではない。
+!docs/*.png
+!public/*.png
 
 # 共有デザインシステム。リポの外に在るので追跡しない。
 # `bun install`（postinstall）が用意する:
