@@ -12,7 +12,9 @@
     "trim": "削除",
     "replace": "置換",
     "serial": "連番付与",
-    "extension": "拡張子変換"
+    "extension": "拡張子変換",
+    "case": "ケース変換",
+    "convert": "全角/半角"
   },
   "position": {
     "start": "先頭 (Prefix)",
@@ -38,6 +40,16 @@
   },
   "trim": {
     "sentence": "<pos></pos><t1>から</t1><count></count><t2>文字削除する</t2>"
+  },
+  "case": {
+    "sentence": "<t1>名前を</t1><mode></mode><t2>にする（拡張子はそのまま）</t2>",
+    "lower": "小文字",
+    "upper": "大文字"
+  },
+  "convert": {
+    "sentence": "<t1>名前の英数字を</t1><mode></mode><t2>にする（拡張子はそのまま）</t2>",
+    "hankaku": "半角",
+    "zenkaku": "全角"
   },
   "extension": {
     "placeholder": "jpg, png, txt...",

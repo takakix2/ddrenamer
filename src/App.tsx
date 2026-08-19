@@ -22,6 +22,8 @@ import {
   X,
   Settings,
   Undo2,
+  CaseSensitive,
+  Languages,
 } from "lucide-react";
 
 // 選択メニューは Lethe_UI_Kit の共有コンポーネント（`src/ui-kit` は symlink）。
@@ -44,7 +46,15 @@ const isMac = navigator.userAgent.includes("Macintosh");
 
 // --- Types ---
 
-type RenameMode = "fixed" | "serial" | "replace" | "add" | "trim" | "extension";
+type RenameMode =
+  | "fixed"
+  | "serial"
+  | "replace"
+  | "add"
+  | "trim"
+  | "extension"
+  | "case"
+  | "convert";
 
 interface LogEntry {
   id: string;
@@ -132,6 +142,22 @@ function App() {
     [t],
   );
 
+  const caseOptions = useMemo(
+    () => [
+      { value: "lower", label: t("case.lower") },
+      { value: "upper", label: t("case.upper") },
+    ],
+    [t],
+  );
+
+  const widthOptions = useMemo(
+    () => [
+      { value: "hankaku", label: t("convert.hankaku") },
+      { value: "zenkaku", label: t("convert.zenkaku") },
+    ],
+    [t],
+  );
+
   useEffect(() => {
     let cancelled = false;
     let unlisten: (() => void) | undefined;
@@ -193,6 +219,15 @@ function App() {
   // 4. Extension
   const [newExtension, setNewExtension] = useState("jpg");
 
+  // 5. Case / Convert
+  //
+  // 🚨 Both modes were implemented in Rust and unreachable from here until
+  // 2026-08-19: `RenameCommand` had eight variants and this file sent six.
+  // Nothing warned about it -- the seam between the two is a JSON string tag,
+  // so neither compiler could see the two modes that were never sent.
+  const [caseMode, setCaseMode] = useState<"upper" | "lower">("lower");
+  const [widthMode, setWidthMode] = useState<"zenkaku" | "hankaku">("hankaku");
+
   // Generic
   const [keepExt, setKeepExt] = useState(true);
 
@@ -203,6 +238,7 @@ function App() {
     useSerialText, serialText, serialPosition, serialStart, serialPad, removeOriginal,
     replaceFrom, replaceTo, useRegex, addText, addPos, trimCount, trimPos,
     newExtension,
+    caseMode, widthMode,
   });
 
   useEffect(() => {
@@ -212,12 +248,14 @@ function App() {
       useSerialText, serialText, serialPosition, serialStart, serialPad, removeOriginal,
       replaceFrom, replaceTo, useRegex, addText, addPos, trimCount, trimPos,
       newExtension,
+      caseMode, widthMode,
     };
   }, [
     activeTab, fixedName, keepExt,
     useSerialText, serialText, serialPosition, serialStart, serialPad, removeOriginal,
     replaceFrom, replaceTo, useRegex, addText, addPos, trimCount, trimPos,
     newExtension,
+    caseMode, widthMode,
   ]);
 
 
@@ -285,6 +323,12 @@ function App() {
             break;
           case "extension":
             cmd = { mode: "Extension", config: { new_ext: cfg.newExtension } };
+            break;
+          case "case":
+            cmd = { mode: "Case", config: { mode: cfg.caseMode } };
+            break;
+          case "convert":
+            cmd = { mode: "Convert", config: { mode: cfg.widthMode } };
             break;
           default:
             continue;
@@ -531,17 +575,19 @@ function App() {
 
       {/* Header / Tabs - 2 Rows */}
       <div className="mode-tabs">
-        {/* Row 1: リネーム, 追加, 削除 */}
+        {/* Row 1: リネーム, 追加, 削除, ケース変換 */}
         <div className="mode-tabs-row">
           <TabButton id="fixed" icon={<Pencil size={18} />} label={t("tabs.fixed")} active={activeTab} onSelect={setActiveTab} />
           <TabButton id="add" icon={<List size={18} />} label={t("tabs.add")} active={activeTab} onSelect={setActiveTab} />
           <TabButton id="trim" icon={<Archive size={18} />} label={t("tabs.trim")} active={activeTab} onSelect={setActiveTab} />
+          <TabButton id="case" icon={<CaseSensitive size={18} />} label={t("tabs.case")} active={activeTab} onSelect={setActiveTab} />
         </div>
-        {/* Row 2: 置換, 連番付与, 拡張子 */}
+        {/* Row 2: 置換, 連番付与, 拡張子, 全角/半角 */}
         <div className="mode-tabs-row">
           <TabButton id="replace" icon={<ArrowRightLeft size={18} />} label={t("tabs.replace")} active={activeTab} onSelect={setActiveTab} />
           <TabButton id="serial" icon={<Hash size={18} />} label={t("tabs.serial")} active={activeTab} onSelect={setActiveTab} />
           <TabButton id="extension" icon={<FileSignature size={18} />} label={t("tabs.extension")} active={activeTab} onSelect={setActiveTab} />
+          <TabButton id="convert" icon={<Languages size={18} />} label={t("tabs.convert")} active={activeTab} onSelect={setActiveTab} />
         </div>
       </div>
 
@@ -763,6 +809,53 @@ function App() {
                   />
                   <p className="field-note">{t("extension.note")}</p>
                 </div>
+              </div>
+            )}
+
+            {/* --- CASE ---
+                📌 `<Trans>` を借りているのは TRIM と同じ理由。ja は
+                「名前を [小文字] にする」、en は「Make the name [lowercase]」で
+                **選択子の位置が地の文の中で動く**ので、並びは locale 側に決めさせる。
+                ⚠️ 拡張子を変えないことは仕様であって手抜きではない（`.JPG` を
+                `.jpg` にするかは拡張子タブの仕事）。地の文でそう言っておく。 */}
+            {activeTab === "case" && (
+              <div className="field-row center animate-in fade-in slide-in-from-top-2">
+                <Trans
+                  i18nKey="case.sentence"
+                  components={{
+                    mode: (
+                      <CustomSelect
+                        className="select-fixed"
+                        value={caseMode}
+                        onChange={(v: string) => setCaseMode(v as "upper" | "lower")}
+                        options={caseOptions}
+                      />
+                    ),
+                    t1: <span className="field-text" />,
+                    t2: <span className="field-text" />,
+                  }}
+                />
+              </div>
+            )}
+
+            {/* --- CONVERT (全角/半角) --- */}
+            {activeTab === "convert" && (
+              <div className="field-row center animate-in fade-in slide-in-from-top-2">
+                <Trans
+                  i18nKey="convert.sentence"
+                  components={{
+                    mode: (
+                      <CustomSelect
+                        className="select-fixed"
+                        value={widthMode}
+                        onChange={(v: string) => setWidthMode(v as "zenkaku" | "hankaku")}
+                        options={widthOptions}
+                      />
+                    ),
+                    t1: <span className="field-text" />,
+                    t2: <span className="field-text" />,
+                  }}
+                />
               </div>
             )}
 

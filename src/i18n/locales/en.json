@@ -12,7 +12,9 @@
     "trim": "Delete",
     "replace": "Replace",
     "serial": "Numbering",
-    "extension": "Extension"
+    "extension": "Extension",
+    "case": "Case",
+    "convert": "Width"
   },
   "position": {
     "start": "Start (Prefix)",
@@ -38,6 +40,16 @@
   },
   "trim": {
     "sentence": "<t1>Delete</t1><count></count><t2>characters from the</t2><pos></pos>"
+  },
+  "case": {
+    "sentence": "<t1>Make the name</t1><mode></mode><t2>, leaving the extension alone</t2>",
+    "lower": "lowercase",
+    "upper": "UPPERCASE"
+  },
+  "convert": {
+    "sentence": "<t1>Make the letters and digits</t1><mode></mode><t2>, leaving the extension alone</t2>",
+    "hankaku": "half-width",
+    "zenkaku": "full-width"
   },
   "extension": {
     "placeholder": "jpg, png, txt...",
