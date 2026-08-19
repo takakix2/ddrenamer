@@ -1,150 +1,106 @@
 # DDRenamer
 
-Rustの堅牢性とTauriの軽量さを備えた高機能リネームツールです。
+*[日本語版はこちら](README.ja.md)*
+
+A batch file renamer built with Rust and Tauri. Pick a mode with a tab, drop files onto a large target, and the rename is done. **Nothing to navigate, room to aim, and fast** — and it can be undone.
 
 ![DDRenamer Icon](public/tauri.svg)
 
-## 🌟 特徴
+## Download
 
-- **🚀 爆速リネーム**: Rust (`std::fs`) によるOSネイティブな高速ファイル操作。
-- **🛡️ 安全設計**: 
-  - 実行結果をサイドバーログでリアルタイム表示。
-  - 同名ファイル存在チェック、空名バリデーション搭載。
-  - **拡張子保護**: 文字変換時に誤って拡張子を書き換えないスマート・トリートメント機能。
-- **🎨 モダンUI**: 
-  - **Tauri v2** + React + **Lethe UI Kit** による洗練されたインターフェース。
-  - Tabula / Alethoglyph と**同じデザインシステム・同じ同梱フォント**で見た目を揃えたファミリー。
-  - 直感的なフラットデザインとスムーズな操作性。
-  - ダークモード標準搭載（Kit の `data-theme` で Lethe / Dark / Light / Cyber を持つ）。
-- **📋 柔軟なファイル入力**:
-  - **ドラッグ＆ドロップ**: ファイルマネージャーから直接ドロップ。
-  - **クリップボードペースト** (`Ctrl+V`): コピーしたファイルを貼り付けて即リネーム。
-  - **Alethoglyph 連携**: Alethoglyph で検索 → `Ctrl+C` → DDRenamer で `Ctrl+V` のシームレスなワークフロー。
-- **Cross-Platform**: Windows, macOS, Linux 対応。
+Prebuilt binaries are on the [releases page](https://github.com/takakix2/ddrenamer/releases).
 
-## 🛠 機能一覧
+| OS | File | Notes |
+|---|---|---|
+| macOS | `DDRenamer_*_universal.dmg` | Intel and Apple Silicon. Signed and notarized, so it opens without ceremony — including offline |
+| Windows | `DDRenamer_*_x64-setup.exe` | Installer (recommended) |
+| Windows | `DDRenamer_*_x64_en-US.msi` | MSI |
+| Linux | `DDRenamer_*_amd64.deb` | Debian / Ubuntu |
+| Linux | `DDRenamer-*.x86_64.rpm` | Fedora / RHEL |
+| Linux | `DDRenamer_*_amd64.AppImage` | Any distribution. Large, because it carries WebKitGTK |
 
-タブ切り替えにより、以下の高度なリネーム操作を直感的に行えます。
+**The Windows builds are not code-signed.** SmartScreen will show its blue "Windows protected your PC" screen. That is the absence of a certificate, not a malware verdict — choose **More info → Run anyway**, or build from source if you would rather not take my word for it.
 
-### 1. リネーム (Rename)
-- 全ファイルを指定した名前に統一。
-- 拡張子の維持/破棄を選択可能。
+## What it does
 
-### 2. 追加 (Add)
-- **Add**: 先頭または末尾に文字列を追加（拡張子を跨がない安全設計）。
+Eight tabs: **Rename · Add · Delete · Case · Replace · Numbering · Extension · Width**.
 
-### 3. 削除 (Trim)
-- **Trim**: 先頭または末尾からN文字を削除。
+- **Rename** — give every file the same name; keep or drop the extension
+- **Add** — text at the start or the end, without crossing into the extension
+- **Delete** — N characters off the front or the back
+- **Replace** — literal or **regular expression**
+- **Numbering** — prefix, counter, suffix; keep the original name (`Vacation_001.jpg`); pad to a width; or count up one drop at a time
+- **Case** — UPPERCASE / lowercase, **stem only**. `IMG_001.JPG` lowercased is `img_001.JPG`; changing `.JPG` is the Extension tab's job
+- **Extension** — change or remove it, with or without the dot
+- **Width** — full-width ↔ half-width for letters, digits and the ideographic space (ＡＢＣ ↔ ABC, U+3000 ↔ space), **stem only**. Kana and kanji are left alone, having no half-width counterpart here
 
-### 4. 置換 (Replace)
-- **Replace**: 文字列置換 (**正規表現 Regex 対応**)。
+Also:
 
-### 5. 連番 (Serial)
-- **Advanced Serial**: 接頭辞 (Prefix) + 連番 + 接尾辞 (Suffix)。
-- **Keep Original**: 元のファイル名を残したまま連番を付与可能 (`Vacation_001.jpg` 等)。
-- **Manual Increment**: ファイルを1つずつドロップするたびにカウントアップする「手動連番」モード搭載。
-- **Padding Control**: 桁数（0埋め）を自在に指定。
+- **Undo** (`Ctrl+Z` / `⌘Z`) — one drop is one batch, and the last 20 batches can be walked back. Held in memory only, so it is not a substitute for a backup
+- **Paste files** (`Ctrl+V`) as well as dropping them
+- **Japanese and English**, four themes
+- **Runs entirely offline.** No network calls, fonts included in the binary
 
-### 6. ケース変換 (Case)
-- 大文字/小文字変換 (UPPERCASE / lowercase)。**Stem のみに適用**。
-- `IMG_001.JPG` → 小文字 → `img_001.JPG`（**`.JPG` は大文字のまま**）。
-  拡張子の大小を変えるのは次の「拡張子変換」の仕事です。
+## Renaming is refused rather than risked
 
-### 7. 全角/半角 (Width)
-- 全角/半角変換 (ＡＢＣ ↔ ABC・全角スペース U+3000 ↔ 半角スペース)。**Stem のみに適用**。
-- 仮名・漢字は両方向とも変換しません（半角相当を持たないため）。
+A rename onto an existing file is **refused, never silently overwritten**. Renames that change only case are allowed, because identity is decided by asking the filesystem (inode on Unix, file index on Windows) rather than by comparing the two names — on a case-insensitive volume the target "already exists" precisely because it *is* the file being renamed.
 
-### 8. 拡張子変換 (Extension)
-- 拡張子の一括変更。ドットの有無は問いません。空にすると拡張子を外します。
+## Names it will not create
 
----
+**The Windows rules are applied on every platform, including Linux and macOS.**
 
-## 🚫 作れない名前
+A name that Linux accepts and Windows cannot open breaks *after* the file has crossed to another machine or a share, far from the rename that caused it. Applying the strictest rules everywhere trades a little freedom for names that keep working wherever they end up. The price is that `a:b.txt`, legal on Linux, cannot be produced here.
 
-**この道具は、どの OS で動いていても Windows の規則で名前を検査します。**
-Linux で作った名前が Windows で開けない、という壊れ方は**ファイルが機械を渡った後**に
-初めて表面化し、原因のリネームから遠く離れた所で起きます。それを避けるための方針で、
-代償として **Linux では合法な `a:b.txt` がこの道具では作れません**。
-
-| 弾くもの | 例 |
+| Refused | Example |
 |---|---|
-| 禁止文字 `< > : " / \ \| ? *` | `a:b.txt` / `a/b.jpg` |
-| 制御文字 | — |
-| 末尾のドット・空白 | `photo.` / `photo ` |
-| 予約デバイス名（大小問わず） | `CON` `PRN` `AUX` `NUL` `COM1`〜`COM9` `LPT1`〜`LPT9`、および `CON.txt` のように拡張子が付いたもの |
-| 空の名前 | 変換結果が空 / 空白だけ |
+| Characters `< > : " / \ \| ? *` | `a:b.txt`, `a/b.jpg` |
+| Control characters | — |
+| A trailing dot or space | `photo.`, `photo ` |
+| Reserved device names, any case | `CON` `PRN` `AUX` `NUL` `COM1`–`COM9` `LPT1`–`LPT9`, and forms with an extension such as `CON.txt` |
+| An empty name | the result is empty or only whitespace |
 
-弾かれたファイルは**名前が変わりません**。ログに 1 件 1 行で理由が出ます
-（`Invalid character '/'` / `Reserved name 'CON'` など）。
+A refused file **keeps its name**, and the log says why, one line per file (`Invalid character '/'`, `Reserved name 'CON'`).
 
-### 📌 予約デバイス名について — **今の Windows より厳しくしています**
+### On device names — this is stricter than the Windows in front of you
 
-2026-08-19 に Windows 11 (build 26200) で実測したところ:
+Measured on Windows 11 build 26200 (2026-08-19):
 
-- **`CON.txt` は普通のファイルでした。** 作成でき、`type` / `copy` / `del` も通ります
-- **裸の `CON` は今も装置です。** ディスク上にファイルとして作ることはできてしまいますが、
-  その後 `type CON` はコンソールを読みに行き、**そのファイルには二度と届きません**
+- **`CON.txt` is an ordinary file.** It can be created, and `type`, `copy` and `del` all reach it
+- **A bare `CON` is still a device.** It *can* be put on disk, and then nothing can open it again — `type CON` reads the console instead
 
-つまり `CON.txt` を弾くのは**今の Windows の制約ではなく、この道具の判断**です。
-古い Windows では `CON.txt` も装置に解決され、Microsoft のドキュメントも今なお
-この形の名前を避けるよう書いています。ファイルは機械とネットワーク共有を渡るので、
-**目の前の OS が許すかどうかではなく、渡った先で開けるかどうか**で決めています。
+So refusing `CON.txt` is this tool's decision, not the operating system's. Older Windows resolved that form to the device, and Microsoft still documents it as one to avoid. Files travel, so the question worth answering is not whether the OS in front of you accepts the name, but whether the name still opens where the file ends up.
 
-⚠️ この結果、**全角の `ＣＯＮ.txt` を半角化することはできません**（`CON.txt` になるため）。
-今の Windows では成功しうる操作を、意図的に諦めています。
+The cost lands on width conversion: **`ＣＯＮ.txt` cannot be narrowed**, because it would become `CON.txt`. An operation that would succeed on today's Windows is given up on purpose.
 
-## 📦 ビルドとインストール
+## Building
 
-### 前提条件
+### Requirements
 - [Bun](https://bun.sh/)
 - Rust (Cargo)
-- **`Lethe_UI_Kit` は自動で用意されます** — `bun install` の `postinstall` が `src/ui-kit` を
-  作ります。隣に checkout があれば symlink し、無ければ公開ミラーを clone するので、
-  **リポジトリ単体の clone でもビルドできます**（2026-08-19 に Windows で実証）。
-  ⚠️ Windows で隣に checkout を置くと symlink の作成に開発者モードか管理者権限が要ります。
-  置かなければ clone 側の経路になるので、そちらが無難です。
-- Linux でバンドル (`deb`/`rpm`/`AppImage`) を焼くなら `libayatana-appindicator3-dev`
-  （実体の `.so` ではなく **`.pc` が必要**。ビルドするマシンにだけ要る）
+- Linux, for `deb`/`rpm`/`AppImage`: `libayatana-appindicator3-dev` (the `.pc` file is what is needed, not just the `.so`, and only on the machine doing the building)
 
-> パッケージマネージャは **bun に一本化**しています（`bun.lock` が正）。
-> m4air には node が入っていないため、npm を正にすると別マシンでビルドできません。
+`bun install` puts the shared design system in place through `postinstall` — it symlinks a sibling checkout if one exists and clones the public mirror otherwise, so **a bare clone of this repository builds**. On Windows, prefer *not* having a sibling checkout: creating the symlink there needs Developer Mode or an elevated shell, while the clone path needs neither.
 
-### 開発モード起動
+> Bun is the only package manager here; `bun.lock` is authoritative.
+
 ```bash
 bun install
-bun run tauri dev
+bun run tauri dev      # development
+bun run tauri build    # release bundles land in src-tauri/target/release/bundle/
 ```
 
-### リリースビルド
-```bash
-bun run tauri build
-```
-生成されたバイナリ (`src-tauri/target/release/bundle/`) を使用してください。
+## Known issues
 
-## ⚠️ Known Issues / Notes
-- **入力欄の `Ctrl+Z`**: Linux では WebKitGTK にキーバインドが無いため、アプリ側で
-  editing command に繋いでいます。**戻す粒度は WebKit が決める**ので、一気に打った名前は
-  一度で全部消えることがあります（`Ctrl+Shift+Z` で戻せます）。
-- **置けない名前**: 上の「[作れない名前](#-作れない名前)」を参照。移植性のため、
-  **どの OS でも Windows の規則で弾きます**。
+- **`Ctrl+Z` inside a text field on Linux.** WebKitGTK has no binding for it, so the app wires the key to the editing command instead. **WebKit decides the granularity**, which means a name typed in one burst can vanish in one undo (`Ctrl+Shift+Z` brings it back).
 
-> 📌 以前ここには「Wayland では D&D が動作しない場合がある」と書いてありましたが、
-> **2026-07-30 に GNOME Wayland ネイティブで実機確認したところ D&D も `Ctrl+V` も動きます。**
-> 一度も測られないまま運ばれていた記述でした。
+## License
 
-## 📜 ライセンス
+**MIT** — see [`LICENSE`](LICENSE).
 
-**MIT License** — 全文は [`LICENSE`](LICENSE)。
+Distributed builds include third-party components, notably the **bundled fonts under the SIL Open Font License 1.1**. Their notices are collected in [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md), and **that file has to travel with the binary** — the OFL requires it. Every published artifact carries it.
 
-⚠️ 配布物には**同梱フォント (SIL Open Font License 1.1)** をはじめとする第三者コンポーネントが
-含まれます。それらの表記は [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) に集約しており、
-**バイナリを配るときは一緒に配る必要があります**（OFL の要求）。
+## Where the idea came from
 
-## 🌱 着想について
+The shape of this tool — a drop target big enough that dropping *is* the whole interaction — comes from soft.NU's **[Drag&Drop Renamer](http://nu.way-nifty.com/top/dragdrop_renamer/index.html)**.
 
-「ドロップゾーンに投げ込むだけでリネームが終わる」という発想は、soft.NU の
-**[Drag&Drop Renamer](http://nu.way-nifty.com/top/dragdrop_renamer/index.html)** に由来します。
-
-⚠️ **本アプリは同作の移植でも後継でもありません。** 名前も異なり、実装・UI・機能は独自のものです
-（Tauri v2 + Rust による作り直しで、Undo / i18n / テーマ / 正規表現置換 などは本アプリ固有）。
-着想を得た先として敬意を込めて記載しています。
+⚠️ **This is not a port of it, and not a successor to it.** The name differs, and the implementation, interface and feature set are their own: a rebuild on Tauri v2 and Rust, with undo, localisation, themes and regular-expression replacement particular to this one. The credit is offered as acknowledgement of where the idea started.
